@@ -1,0 +1,153 @@
+Evo kompletnog plana izrade i arhitekture za **Multi-Tenant (višekorisnički) Viber AI sistem**. Cilj je da sve izgradite jednom, a da dodavanje svakog novog klijenta (Firme B, C, D) traje **manje od 30 minuta** konfiguracije.
+
+---
+
+### Arhitektura višekratnog (Reusable) sistema
+
+Sistem se sastoji od 4 nezavisna sloja:
+
+```
+[Viber Bot Firma 1] ──(Token 1)──┐
+[Viber Bot Firma 2] ──(Token 2)──┼──> [Centralni Node.js Gateway / n8n] ──> [OpenAI API]
+[Viber Bot Firma 3] ──(Token 3)──┘              │
+                                                ├──> [Klijentska Baza / Webhook]
+                                                └──> [Chatwoot CRM - po 1 Tenant za svaku firmu]
+
+```
+
+* **Tenant Registry (Vaša centralna baza):** Tabela koja spaja `viber_bot_token` $\rightarrow$ `klijent_id`, `api_baze_klijenta`, `prompt_instrukcije`.
+* **Dynamic Routing:** Centralni backend na osnovu pristiglog Webhook-a prepoznaje o kom se Viber botu radi i automatski vuče konfiguraciju i bazu te konkretne firme.
+
+---
+
+## Detaljan plan izrade i taskovi (Roadmap)
+
+### FAZA 1: Osnova Centralnog Backenda i Multi-Tenant Baze
+
+**Cilj:** Napraviti core sistem koji može da uredi više klijenata iz jedne baze.
+
+* [ ] **Task 1.1: Kreiranje centralne konfiguracione baze (Tenant Store)**
+* Napraviti tabelu `tenants` sa kolonama:
+* `tenant_id` (UUID / slug)
+* `firm_name` (Naziv firme)
+* `viber_auth_token` (Viber Token klijenta)
+* `database_type` (`google_sheets`, `woocommerce`, `sql_readonly`, `custom_api`)
+* `database_credentials` (API key, URL ili konekcioni parametri)
+* `system_prompt` (Specifične instrukcije za AI tona i ponašanja te firme)
+* `chatwoot_inbox_id` (ID sandučeta u CRM-u)
+
+
+
+
+* [ ] **Task 1.2: Postavljanje centralnog Webhook Receiver-a**
+* Podesiti jedinstveni endpoint: `POST /api/viber/webhook`
+* Implementirati middleware koji čita dolazni Viber zaglavlje/payload, identifikuje koji je bot primio poruku i učitava odgovarajući `tenant` iz baze.
+
+
+* [ ] **Task 1.3: Rutiranje u Chatwoot CRM (Multi-Agent sistem)**
+* Podići *Chatwoot Community* na vašem VPS-u.
+* Kreirati odvojene **Inbox-e** ili **Account-e** za svaku firmu tako da radnici Firme A ne vide poruke Firme B.
+
+
+
+---
+
+### FAZA 2: Integracija AI Logike i "Function Calling-a"
+
+**Cilj:** AI mora dinamički da poziva bazu konkretne firme, a ne da se podaci hardkoduju.
+
+* [ ] **Task 2.1: Implementacija OpenAI / Claude sa pozivanjem funkcija**
+* Podesiti AI klasu koja prima `system_prompt` iz tenanta i poruku korisnika.
+* Definisati univerzalni alat (Tool/Function) za proveru lagera: `check_product_availability(query, tenant_id)`.
+
+
+* [ ] **Task 2.2: Izrada apstrakcionog sloja za baze (Database Abstraction Layer)**
+* Napraviti modularne konektore za baze:
+* `GoogleSheetsConnector` (za manje firme bez sajta).
+* `WooCommerceConnector` (preko WooCommerce REST API-ja za e-commerce).
+* `SQLConnector` (Read-only upiti nad eksternim bazama).
+
+
+* Backend na osnovu `database_type` poziva odgovarajući konektor koji vraća standardizovan JSON (`{ title, price, stock, description }`).
+
+
+* [ ] **Task 2.3: Sprečavanje AI halucinacija i sigurnost**
+* Postaviti striktno pravilo u promptu: *"Ako proizvod ne postoji u vraćenim rezultatima funkcije, jasnim rečima reci da ga nema na stanju. Nikada nemoj izmišljati cene."*
+
+
+
+---
+
+### FAZA 3: Upravljanje Radnim Vremenom i Preuzimanje od Strane Radnika
+
+**Cilj:** Omogućiti prelaz sa AI bota na žive radnike kada su dostupni.
+
+* [ ] **Task 3.1: Provera radnog vremena (Business Hours Logic)**
+* U tabelu `tenants` dodati radno vreme (`working_hours`).
+* Ako je poruka stigla unutar radnog vremena $\rightarrow$ poruka ide direktno radnicima u Chatwoot.
+* Ako je van radnog vremena ili radnik ne odgovori u roku od 3 minuta $\rightarrow$ uključuje se AI bot.
+
+
+* [ ] **Task 3.2: Handover mehanizam (Preuzimanje razgovora)**
+* Ako mušterija napiše *"Želim da pričam sa čovekom"*, bot šalje notifikaciju radnicima u Chatwoot i privremeno suspenduje AI odgovore za tog korisnika na 24h.
+
+
+
+---
+
+### FAZA 4: Šablonizacija i "Onboarding Check-lista" za Nove Klijente
+
+**Cilj:** Standardizovana procedura uvođenja novog klijenta u rad.
+
+Ovo je procedura koju prolazite svaki put kada nađete novog klijenta:
+
+| Korak | Akcija | Vreme trajanja |
+| --- | --- | --- |
+| **1.** | Otvaranje novog bota na Viber Admin Portalu sa logoom i imenom klijenta. | 5 min |
+| **2.** | Unos novog reda u vašu `tenants` tabelu (Token, Prompt, Baza). | 5 min |
+| **3.** | Registracija radnika u Chatwoot-u i povezivanje sa novim Inbox-om. | 10 min |
+| **4.** | Registracija Webhook URL-a kod Vibera (`POST /api/viber/register-webhook`). | 2 min |
+| **5.** | Testni upit (Slanje poruke sa mobilnog i provera stanja artikla). | 5 min |
+
+---
+To što ste osmislili je apsolutno ono što malim i srednjim preduzećima treba, i predstavlja klasičan pain-killer (rešenje za gorući problem) za vlasnike firmi.
+
+Međutim, iz ugla prodaje i realne primene na našem tržištu, firme obično ne razmišljaju tehnički (o botovima, AI-ju i API-ju), već razmišljaju o svom problemu i novcu.
+
+Evo iskrene analize onoga što ste sklopili, šta im je stvarno presudno, i koje dve-tri sitnice obično fale ili ih treba izmeniti da bi ponuda bila „neodoljiva“:
+
+Šta je pun pogodak u vašem planu?
+Fokus na Viber: Na našem tržištu Viber je i dalje neprikosnoven za komunikaciju sa mušterijama. Svi ga imaju i svi znaju da ga koriste.
+
+Rešavanje "mrtvog vremena": Činjenica da bot radi i noću, vikendom i dok radnici ručaju ili su zauzeti u magacinu je najveći argument za kupovinu. Vlasnici znaju koliko upita izgube samo zato što nisu stigli da odgovore u roku od 15 minuta.
+
+Automatsko povlačenje cena i stanja: To što klijent ne mora ručno da ažurira dva sistema, već bot sam čita iz njihovog Excel-a/sajta, štedi im sate posla.
+
+Šta obično nedostaje ili bi trebalo izmeniti?
+Kada vlasnik firme vidi ovakav sistem, obično će tražiti još 3 stvari bez kojih sistem nije potpuno upotrebljiv:
+
+1. Čuvanje kontakata (Leads / CRM baza)
+Šta fali: Ako mušterija pita za cenu i stanje i ode, da li vam ostaje njen broj?
+
+Izmena: Sistem bi obavezno trebalo da (tiho u pozadini) beleži ko je pitao šta, da vlasnik ili radnici sutra mogu da vide listu ljudi koji su se interesovali za proizvod, a nisu kupili (tzv. lead generation). To je ogroman mamac za vlasnike firmi.
+
+2. Rezervni plan ("Human Handover" taster)
+Šta fali: AI može da pogreši ili da se mušterija zapetlja sa pitanjima na koja bot nema odgovor.
+
+Izmena: Bot na kraju uvek mora imati opciju: "Da li želite da vas pozove kolega / da prebacim razgovor na operatera?". Kada mušterija klikne to dugme, bot staje, a radniku u Chatwoot-u iskče hitna notifikacija da preuzme chat. Bez ovoga, mušterije polude ako se zaglave u krugu sa AI-jem.
+
+3. Podsetnik / Sakupljanje podataka kada nema artikla
+Šta fali: Mušterija pita: "Imate li X proizvod?", a bot kaže: "Nemamo na stanju". Tu se razgovor obično završi i mušterija ode kod konkurencije.
+
+Izmena: Pametno je podesiti bota da u tom trenutku kaže: "Trenutno ga nemamo, ali stiže sledeće nedelje. Da li želite da vam pošaljem poruku čim stigne?". Time pretvarate izgubljen upit u siguran kontakt.
+
+Kako da formulišete ponudu da se „sami prodaju“?
+Kada budete nudili ovo preduzećima, nemojte im pričati o n8n-u, API-ju, tokenima, AI promptovima i Viber webhook-ovima. Njih to ne zanima.
+
+Njima ponudu spakujte u 3 proste rečenice:
+
+"Pravim vam sistem za Viber gde vaš bot automatski odgovara kupcima 24/7 na pitanja 'Imate li ovo na stanju i pošto je?', povlačeći podatke direktno iz vašeg sajta/tabele. Kada niste tu, bot prima upite, a kada radnici dođu na posao, nastavljaju razgovor kroz jednu aplikaciju gde se poruke nikada ne mešaju. Rešavamo problem propuštenih kupaca van radnog vremena."
+
+Konačna ocjena
+Koncept koji ste složili je izuzetno komercijalan. Imate tehničko znanje da ga sklopite, troškovi su vam minimalni, a proizvod rešava realnu glavobolju malih biznisa. Uz dodatak hvatanja kontakata (leads) i lakog prebacivanja na čoveka, ovo je pun pogodak za biznis model.
+
