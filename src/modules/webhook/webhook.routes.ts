@@ -46,4 +46,48 @@ router.post('/register-webhook', async (req: Request, res: Response, next: NextF
   }
 });
 
+// Send test message to a Viber user (admin only)
+router.post('/test-message', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token || token !== env.ADMIN_API_TOKEN) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const { tenant_id, viber_user_id } = req.body;
+    if (!tenant_id || !viber_user_id) {
+      res.status(400).json({ error: 'tenant_id and viber_user_id are required' });
+      return;
+    }
+
+    const tenant = await tenantService.getById(tenant_id);
+    if (!tenant) {
+      res.status(404).json({ error: 'Tenant not found' });
+      return;
+    }
+
+    // Verify webhook is set up
+    const accountInfo = await viberService.getAccountInfo(tenant.viber_auth_token);
+    const expectedWebhook = `${env.WEBHOOK_BASE_URL}/api/viber/webhook/${tenant.slug}`;
+
+    // Send test message
+    await viberService.sendTextMessage({
+      authToken: tenant.viber_auth_token,
+      receiverId: viber_user_id,
+      text: `Test message from ${tenant.firm_name} bot. Setup is working!`,
+      senderName: tenant.firm_name,
+    });
+
+    res.json({
+      message: 'Test message sent',
+      webhook_url: accountInfo.webhook,
+      webhook_match: accountInfo.webhook === expectedWebhook,
+      bot_name: accountInfo.name,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export { router as webhookRoutes };

@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { tenantService } from './tenant.service';
+import { checkTenantHealth } from './tenant.health';
 import { env } from '../../config/env';
 
 const router = Router();
@@ -20,6 +21,16 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const tenants = await tenantService.getAll();
     res.json(tenants);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/:id/health', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const report = await checkTenantHealth(req.params.id as string);
+    const status = report.allHealthy ? 200 : 503;
+    res.status(status).json(report);
   } catch (err) {
     next(err);
   }

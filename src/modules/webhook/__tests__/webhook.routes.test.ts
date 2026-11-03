@@ -165,6 +165,203 @@ describe('webhook.routes integration', () => {
     });
   });
 
+  describe('POST /api/viber/test-message', () => {
+    it('returns 401 when no authorization header', async () => {
+      const res = await request(app)
+        .post('/api/viber/test-message')
+        .send({ tenant_id: 't-1', viber_user_id: 'user-1' });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('Unauthorized');
+    });
+
+    it('returns 400 when tenant_id is missing', async () => {
+      const res = await request(app)
+        .post('/api/viber/test-message')
+        .set('Authorization', 'Bearer test-admin-token')
+        .send({ viber_user_id: 'user-1' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('tenant_id and viber_user_id are required');
+    });
+
+    it('returns 400 when viber_user_id is missing', async () => {
+      const res = await request(app)
+        .post('/api/viber/test-message')
+        .set('Authorization', 'Bearer test-admin-token')
+        .send({ tenant_id: 't-1' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('tenant_id and viber_user_id are required');
+    });
+
+    it('returns 404 when tenant not found', async () => {
+      mockTenantService.getById.mockResolvedValue(null);
+
+      const res = await request(app)
+        .post('/api/viber/test-message')
+        .set('Authorization', 'Bearer test-admin-token')
+        .send({ tenant_id: 'nonexistent', viber_user_id: 'user-1' });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('Tenant not found');
+    });
+
+    it('sends test message and returns result', async () => {
+      mockTenantService.getById.mockResolvedValue({
+        ...mockTenant,
+        timezone: 'Europe/Belgrade',
+        working_hours: {},
+        handover_keywords: [],
+      } as any);
+      mockViberService.getAccountInfo.mockResolvedValue({
+        status: 0,
+        status_message: 'ok',
+        name: 'Test Bot',
+        uri: 'testbot',
+        webhook: 'https://test.example.com/api/viber/webhook/test-tenant',
+        subscribers_count: 5,
+      });
+      mockViberService.sendTextMessage.mockResolvedValue(undefined);
+
+      const res = await request(app)
+        .post('/api/viber/test-message')
+        .set('Authorization', 'Bearer test-admin-token')
+        .send({ tenant_id: 't-1', viber_user_id: 'user-1' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe('Test message sent');
+      expect(res.body.bot_name).toBe('Test Bot');
+      expect(res.body.webhook_match).toBe(true);
+      expect(mockViberService.sendTextMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authToken: 'test-viber-token',
+          receiverId: 'user-1',
+        })
+      );
+    });
+
+    it('returns 500 on unexpected error', async () => {
+      mockTenantService.getById.mockRejectedValue(new Error('DB down'));
+
+      const res = await request(app)
+        .post('/api/viber/test-message')
+        .set('Authorization', 'Bearer test-admin-token')
+        .send({ tenant_id: 't-1', viber_user_id: 'user-1' });
+
+      expect(res.status).toBe(500);
+    });
+
+    it('returns 401 with invalid token', async () => {
+      const res = await request(app)
+        .post('/api/viber/test-message')
+        .set('Authorization', 'Bearer wrong-token')
+        .send({ tenant_id: 't-1', viber_user_id: 'user-1' });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('Unauthorized');
+    });
+
+    it('returns webhook_match false when webhooks differ', async () => {
+      mockTenantService.getById.mockResolvedValue({
+        ...mockTenant,
+        timezone: 'Europe/Belgrade',
+        working_hours: {},
+        handover_keywords: [],
+      } as any);
+      mockViberService.getAccountInfo.mockResolvedValue({
+        status: 0,
+        status_message: 'ok',
+        name: 'Test Bot',
+        uri: 'testbot',
+        webhook: 'https://other-domain.com/api/viber/webhook/test-tenant',
+        subscribers_count: 5,
+      });
+      mockViberService.sendTextMessage.mockResolvedValue(undefined);
+
+      const res = await request(app)
+        .post('/api/viber/test-message')
+        .set('Authorization', 'Bearer test-admin-token')
+        .send({ tenant_id: 't-1', viber_user_id: 'user-1' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.webhook_match).toBe(false);
+      expect(res.body.webhook_url).toBe('https://other-domain.com/api/viber/webhook/test-tenant');
+    });
+
+    it('returns 500 when getAccountInfo fails', async () => {
+      mockTenantService.getById.mockResolvedValue({
+        ...mockTenant,
+        timezone: 'Europe/Belgrade',
+        working_hours: {},
+        handover_keywords: [],
+      } as any);
+      mockViberService.getAccountInfo.mockRejectedValue(new Error('Viber API down'));
+
+      const res = await request(app)
+        .post('/api/viber/test-message')
+        .set('Authorization', 'Bearer test-admin-token')
+        .send({ tenant_id: 't-1', viber_user_id: 'user-1' });
+
+      expect(res.status).toBe(500);
+    });
+
+    it('returns 500 when sendTextMessage fails', async () => {
+      mockTenantService.getById.mockResolvedValue({
+        ...mockTenant,
+        timezone: 'Europe/Belgrade',
+        working_hours: {},
+        handover_keywords: [],
+      } as any);
+      mockViberService.getAccountInfo.mockResolvedValue({
+        status: 0,
+        status_message: 'ok',
+        name: 'Test Bot',
+        uri: 'testbot',
+        webhook: 'https://test.example.com/api/viber/webhook/test-tenant',
+        subscribers_count: 5,
+      });
+      mockViberService.sendTextMessage.mockRejectedValue(new Error('Invalid receiver'));
+
+      const res = await request(app)
+        .post('/api/viber/test-message')
+        .set('Authorization', 'Bearer test-admin-token')
+        .send({ tenant_id: 't-1', viber_user_id: 'bad-user' });
+
+      expect(res.status).toBe(500);
+    });
+
+    it('sends correct text content with firm name', async () => {
+      mockTenantService.getById.mockResolvedValue({
+        ...mockTenant,
+        timezone: 'Europe/Belgrade',
+        working_hours: {},
+        handover_keywords: [],
+      } as any);
+      mockViberService.getAccountInfo.mockResolvedValue({
+        status: 0,
+        status_message: 'ok',
+        name: 'Test Bot',
+        uri: 'testbot',
+        webhook: 'https://test.example.com/api/viber/webhook/test-tenant',
+        subscribers_count: 5,
+      });
+      mockViberService.sendTextMessage.mockResolvedValue(undefined);
+
+      await request(app)
+        .post('/api/viber/test-message')
+        .set('Authorization', 'Bearer test-admin-token')
+        .send({ tenant_id: 't-1', viber_user_id: 'user-1' });
+
+      expect(mockViberService.sendTextMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining('Test Firm'),
+          senderName: 'Test Firm',
+        })
+      );
+    });
+  });
+
   describe('GET /health', () => {
     it('returns 200 when all services are healthy', async () => {
       mockCheckDb.mockResolvedValue(true);

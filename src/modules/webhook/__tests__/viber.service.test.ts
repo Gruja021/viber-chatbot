@@ -51,6 +51,101 @@ describe('viberService', () => {
     });
   });
 
+  describe('getAccountInfo', () => {
+    it('returns account info on success', async () => {
+      mockAxios.post.mockResolvedValue({
+        data: {
+          status: 0,
+          status_message: 'ok',
+          name: 'Test Bot',
+          uri: 'testbot',
+          webhook: 'https://example.com/webhook',
+          subscribers_count: 10,
+        },
+      });
+
+      const result = await viberService.getAccountInfo('viber-token');
+
+      expect(result.name).toBe('Test Bot');
+      expect(result.webhook).toBe('https://example.com/webhook');
+      expect(result.subscribers_count).toBe(10);
+      expect(mockAxios.post).toHaveBeenCalledWith(
+        'https://chatapi.viber.com/pa/get_account_info',
+        {},
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'X-Viber-Auth-Token': 'viber-token',
+          }),
+        })
+      );
+    });
+
+    it('throws when Viber returns error status', async () => {
+      mockAxios.post.mockResolvedValue({
+        data: { status: 1, status_message: 'invalid token' },
+      });
+
+      await expect(viberService.getAccountInfo('bad-token')).rejects.toThrow(
+        'Viber get_account_info failed: invalid token'
+      );
+    });
+
+    it('throws on axios rejection', async () => {
+      mockAxios.post.mockRejectedValue(new Error('Network error'));
+      await expect(viberService.getAccountInfo('viber-token')).rejects.toThrow('Network error');
+    });
+
+    it('returns all expected fields from response', async () => {
+      const accountData = {
+        status: 0,
+        status_message: 'ok',
+        name: 'Full Bot',
+        uri: 'fullbot',
+        webhook: 'https://example.com/hook',
+        subscribers_count: 100,
+      };
+      mockAxios.post.mockResolvedValue({ data: accountData });
+
+      const result = await viberService.getAccountInfo('viber-token');
+
+      expect(result.status).toBe(0);
+      expect(result.status_message).toBe('ok');
+      expect(result.name).toBe('Full Bot');
+      expect(result.uri).toBe('fullbot');
+      expect(result.webhook).toBe('https://example.com/hook');
+      expect(result.subscribers_count).toBe(100);
+    });
+
+    it('sends empty body in POST request', async () => {
+      mockAxios.post.mockResolvedValue({
+        data: {
+          status: 0,
+          status_message: 'ok',
+          name: 'Bot',
+          uri: 'bot',
+          webhook: '',
+          subscribers_count: 0,
+        },
+      });
+
+      await viberService.getAccountInfo('viber-token');
+
+      expect(mockAxios.post).toHaveBeenCalledWith(
+        expect.any(String),
+        {},
+        expect.any(Object)
+      );
+    });
+
+    it('includes error status_message in thrown error', async () => {
+      mockAxios.post.mockResolvedValue({
+        data: { status: 2, status_message: 'token not found' },
+      });
+
+      await expect(viberService.getAccountInfo('bad')).rejects.toThrow('token not found');
+    });
+  });
+
   describe('setWebhook', () => {
     it('registers webhook successfully', async () => {
       mockAxios.post.mockResolvedValue({ data: { status: 0, status_message: 'ok' } });

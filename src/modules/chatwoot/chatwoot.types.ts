@@ -25,3 +25,23 @@ export interface ChatwootConversation {
   inbox_id: number;
   contact: ChatwootContact;
 }
+
+export interface ChatwootCreateInboxOptions {
+  chatwootApiToken: string;
+  chatwootAccountId: number;
+  name: string;
+  channelType?: string;
+}
+
+export interface ChatwootCreateInboxResult {
+  id: number;
+  name: string;
+  channel_type: string;
+}
+
+export interface ChatwootAddAgentToInboxOptions {
+  chatwootApiToken: string;
+  chatwootAccountId: number;
+  inboxId: number;
+  agentIds: number[];
+}

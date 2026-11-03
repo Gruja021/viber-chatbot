@@ -3,6 +3,15 @@ import { logger } from '../../config/logger';
 
 const VIBER_API_BASE = 'https://chatapi.viber.com/pa';
 
+export interface ViberAccountInfo {
+  status: number;
+  status_message: string;
+  name: string;
+  uri: string;
+  webhook: string;
+  subscribers_count: number;
+}
+
 export interface ViberSendMessageOptions {
   authToken: string;
   receiverId: string;
@@ -12,6 +21,30 @@ export interface ViberSendMessageOptions {
 }
 
 export const viberService = {
+  async getAccountInfo(authToken: string): Promise<ViberAccountInfo> {
+    try {
+      const response = await axios.post(
+        `${VIBER_API_BASE}/get_account_info`,
+        {},
+        {
+          headers: {
+            'X-Viber-Auth-Token': authToken,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.data.status !== 0) {
+        throw new Error(`Viber get_account_info failed: ${response.data.status_message}`);
+      }
+
+      return response.data;
+    } catch (err) {
+      logger.error({ err }, 'Failed to get Viber account info');
+      throw err;
+    }
+  },
+
   async sendTextMessage(options: ViberSendMessageOptions): Promise<void> {
     try {
       const response = await axios.post(

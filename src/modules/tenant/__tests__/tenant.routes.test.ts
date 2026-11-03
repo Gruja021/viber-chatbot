@@ -1,9 +1,12 @@
 import request from 'supertest';
 import { app } from '../../../app';
 import { tenantService } from '../tenant.service';
+import { checkTenantHealth } from '../tenant.health';
 
 jest.mock('../tenant.service');
+jest.mock('../tenant.health');
 const mockService = tenantService as jest.Mocked<typeof tenantService>;
+const mockCheckTenantHealth = checkTenantHealth as jest.MockedFunction<typeof checkTenantHealth>;
 
 const AUTH_HEADER = `Bearer test-admin-token`;
 
@@ -155,6 +158,82 @@ describe('tenant.routes integration', () => {
         .set('Authorization', AUTH_HEADER);
 
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('GET /api/tenants/:id/health', () => {
+    it('returns 401 without auth token', async () => {
+      const res = await request(app).get('/api/tenants/uuid-1/health');
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('Unauthorized');
+    });
+
+    it('returns 200 when all checks are healthy', async () => {
+      mockCheckTenantHealth.mockResolvedValue({
+        tenant_id: 'uuid-1',
+        checks: [
+          { check: 'database', healthy: true, detail: 'Tenant exists and is active' },
+          { check: 'viber', healthy: true, detail: 'Bot: TestBot, subscribers: 5' },
+          { check: 'chatwoot', healthy: true, detail: 'Inbox accessible' },
+          { check: 'data_source', healthy: true, detail: 'N/A — no data source configured' },
+        ],
+        allHealthy: true,
+      });
+
+      const res = await request(app)
+        .get('/api/tenants/uuid-1/health')
+        .set('Authorization', AUTH_HEADER);
+
+      expect(res.status).toBe(200);
+      expect(res.body.allHealthy).toBe(true);
+      expect(res.body.tenant_id).toBe('uuid-1');
+      expect(res.body.checks).toHaveLength(4);
+    });
+
+    it('returns 503 when some checks fail', async () => {
+      mockCheckTenantHealth.mockResolvedValue({
+        tenant_id: 'uuid-1',
+        checks: [
+          { check: 'database', healthy: true, detail: 'Tenant exists and is active' },
+          { check: 'viber', healthy: false, detail: 'Failed to reach Viber API' },
+          { check: 'chatwoot', healthy: true, detail: 'Inbox accessible' },
+          { check: 'data_source', healthy: true, detail: 'N/A — no data source configured' },
+        ],
+        allHealthy: false,
+      });
+
+      const res = await request(app)
+        .get('/api/tenants/uuid-1/health')
+        .set('Authorization', AUTH_HEADER);
+
+      expect(res.status).toBe(503);
+      expect(res.body.allHealthy).toBe(false);
+      expect(res.body.checks[1]).toMatchObject({ check: 'viber', healthy: false });
+    });
+
+    it('returns 503 when tenant not found', async () => {
+      mockCheckTenantHealth.mockResolvedValue({
+        tenant_id: 'nonexistent',
+        checks: [{ check: 'database', healthy: false, detail: 'Tenant not found' }],
+        allHealthy: false,
+      });
+
+      const res = await request(app)
+        .get('/api/tenants/nonexistent/health')
+        .set('Authorization', AUTH_HEADER);
+
+      expect(res.status).toBe(503);
+      expect(res.body.allHealthy).toBe(false);
+    });
+
+    it('returns 500 on unexpected error', async () => {
+      mockCheckTenantHealth.mockRejectedValue(new Error('Unexpected failure'));
+
+      const res = await request(app)
+        .get('/api/tenants/uuid-1/health')
+        .set('Authorization', AUTH_HEADER);
+
+      expect(res.status).toBe(500);
     });
   });
 });
