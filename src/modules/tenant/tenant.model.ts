@@ -1,6 +1,15 @@
 export type TenantStatus = 'active' | 'inactive' | 'suspended';
 export type DatabaseType = 'google_sheets' | 'woocommerce' | 'postgresql' | 'mysql';
 
+export type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+export interface DaySchedule {
+  start: string; // "09:00"
+  end: string;   // "17:00"
+}
+
+export type WorkingHours = Partial<Record<DayOfWeek, DaySchedule>>;
+
 export interface Tenant {
   id: string;
   slug: string;
@@ -12,6 +21,9 @@ export interface Tenant {
   chatwoot_account_id: number | null;
   chatwoot_inbox_id: number | null;
   chatwoot_api_token: string | null;
+  timezone: string;
+  working_hours: WorkingHours;
+  handover_keywords: string[];
   status: TenantStatus;
   created_at: Date;
   updated_at: Date;
@@ -27,6 +39,9 @@ export interface CreateTenantInput {
   chatwoot_account_id?: number;
   chatwoot_inbox_id?: number;
   chatwoot_api_token?: string;
+  timezone?: string;
+  working_hours?: WorkingHours;
+  handover_keywords?: string[];
 }
 
 export interface UpdateTenantInput {
@@ -39,6 +54,9 @@ export interface UpdateTenantInput {
   chatwoot_account_id?: number;
   chatwoot_inbox_id?: number;
   chatwoot_api_token?: string;
+  timezone?: string;
+  working_hours?: WorkingHours;
+  handover_keywords?: string[];
   status?: TenantStatus;
 }
 
@@ -50,6 +68,9 @@ export interface TenantPublic {
   system_prompt: string;
   chatwoot_account_id: number | null;
   chatwoot_inbox_id: number | null;
+  timezone: string;
+  working_hours: WorkingHours;
+  handover_keywords: string[];
   status: TenantStatus;
   created_at: Date;
   updated_at: Date;

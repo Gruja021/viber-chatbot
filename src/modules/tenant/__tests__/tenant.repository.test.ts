@@ -136,6 +136,142 @@ describe('tenantRepository', () => {
       await tenantRepository.update('uuid-1', { database_credentials: '{"new":"creds"}' });
       expect(mockEncrypt).toHaveBeenCalledWith('{"new":"creds"}');
     });
+
+    it('updates slug field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { slug: 'new-slug' });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('slug = $1'),
+        ['new-slug', 'uuid-1']
+      );
+    });
+
+    it('updates viber_auth_token field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { viber_auth_token: 'new-token' });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('viber_auth_token = $1'),
+        ['new-token', 'uuid-1']
+      );
+    });
+
+    it('updates database_type field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { database_type: 'postgresql' });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('database_type = $1'),
+        ['postgresql', 'uuid-1']
+      );
+    });
+
+    it('updates system_prompt field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { system_prompt: 'New prompt' });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('system_prompt = $1'),
+        ['New prompt', 'uuid-1']
+      );
+    });
+
+    it('updates chatwoot_account_id field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { chatwoot_account_id: 10 });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('chatwoot_account_id = $1'),
+        [10, 'uuid-1']
+      );
+    });
+
+    it('updates chatwoot_inbox_id field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { chatwoot_inbox_id: 20 });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('chatwoot_inbox_id = $1'),
+        [20, 'uuid-1']
+      );
+    });
+
+    it('updates chatwoot_api_token field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { chatwoot_api_token: 'cw-new' });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('chatwoot_api_token = $1'),
+        ['cw-new', 'uuid-1']
+      );
+    });
+
+    it('updates timezone field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { timezone: 'UTC' });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('timezone = $1'),
+        ['UTC', 'uuid-1']
+      );
+    });
+
+    it('updates working_hours as JSON string', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      const hours = { monday: { start: '09:00', end: '17:00' } };
+      await tenantRepository.update('uuid-1', { working_hours: hours });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('working_hours = $1'),
+        [JSON.stringify(hours), 'uuid-1']
+      );
+    });
+
+    it('updates handover_keywords field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { handover_keywords: ['help', 'agent'] });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('handover_keywords = $1'),
+        [['help', 'agent'], 'uuid-1']
+      );
+    });
+
+    it('updates status field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { status: 'suspended' });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('status = $1'),
+        ['suspended', 'uuid-1']
+      );
+    });
+
+    it('builds correct query with multiple fields and sequential indices', async () => {
+      const encBuf = Buffer.from('encrypted');
+      mockEncrypt.mockReturnValue(encBuf);
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+
+      await tenantRepository.update('uuid-1', {
+        slug: 'slug',
+        firm_name: 'name',
+        viber_auth_token: 'token',
+        database_type: 'postgresql',
+        database_credentials: '{}',
+        system_prompt: 'prompt',
+        chatwoot_account_id: 10,
+        chatwoot_inbox_id: 20,
+        chatwoot_api_token: 'cw',
+        timezone: 'UTC',
+        working_hours: { monday: { start: '09:00', end: '17:00' } },
+        handover_keywords: ['help'],
+        status: 'inactive',
+      });
+
+      const [query, values] = mockQuery.mock.calls[0];
+      // All 13 fields + id = 14 values
+      expect(values).toHaveLength(14);
+      expect(query).toContain('slug = $1');
+      expect(query).toContain('status = $13');
+      expect(query).toContain('WHERE id = $14');
+      expect(query).toContain('updated_at = NOW()');
+    });
+
+    it('returns null when updated tenant not found', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+      const result = await tenantRepository.update('nonexistent', { firm_name: 'X' });
+      expect(result).toBeNull();
+    });
   });
 
   describe('deactivate', () => {

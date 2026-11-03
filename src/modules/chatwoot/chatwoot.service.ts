@@ -58,6 +58,56 @@ export const chatwootService = {
       logger.error({ err, conversationId: options.conversationId }, 'Failed to send Chatwoot message');
     }
   },
+
+  async addInternalNote(options: {
+    chatwootApiToken: string;
+    chatwootAccountId: number;
+    conversationId: number;
+    content: string;
+  }): Promise<void> {
+    try {
+      await axios.post(
+        `${CHATWOOT_BASE_URL}/api/v1/accounts/${options.chatwootAccountId}/conversations/${options.conversationId}/messages`,
+        {
+          content: options.content,
+          message_type: 'outgoing',
+          private: true,
+        },
+        {
+          headers: {
+            'api_access_token': options.chatwootApiToken,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    } catch (err) {
+      logger.error({ err, conversationId: options.conversationId }, 'Failed to add Chatwoot internal note');
+    }
+  },
+
+  async assignConversation(options: {
+    chatwootApiToken: string;
+    chatwootAccountId: number;
+    conversationId: number;
+    assigneeId?: number;
+  }): Promise<void> {
+    try {
+      await axios.post(
+        `${CHATWOOT_BASE_URL}/api/v1/accounts/${options.chatwootAccountId}/conversations/${options.conversationId}/assignments`,
+        {
+          assignee_id: options.assigneeId || null,
+        },
+        {
+          headers: {
+            'api_access_token': options.chatwootApiToken,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    } catch (err) {
+      logger.error({ err, conversationId: options.conversationId }, 'Failed to assign Chatwoot conversation');
+    }
+  },
 };
 
 async function findOrCreateContact(

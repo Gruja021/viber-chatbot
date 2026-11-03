@@ -67,4 +67,16 @@ export const conversationService = {
   async clearHandover(conversationId: string): Promise<void> {
     await conversationRepository.clearHandover(conversationId);
   },
+
+  async setPendingAgent(conversationId: string): Promise<void> {
+    await conversationRepository.setPendingAgent(conversationId);
+  },
+
+  async clearPendingAgent(conversationId: string): Promise<void> {
+    await conversationRepository.clearPendingAgent(conversationId);
+  },
+
+  async findByChatwootConversationId(chatwootConversationId: number): Promise<Conversation | null> {
+    return conversationRepository.findByChatwootConversationId(chatwootConversationId);
+  },
 };

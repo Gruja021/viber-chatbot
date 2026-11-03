@@ -86,4 +86,80 @@ describe('chatwootService', () => {
       await expect(chatwootService.sendMessage(options)).resolves.not.toThrow();
     });
   });
+
+  describe('addInternalNote', () => {
+    const options = {
+      chatwootApiToken: 'cw-token',
+      chatwootAccountId: 1,
+      conversationId: 99,
+      content: 'Internal note content',
+    };
+
+    it('sends private message to conversation', async () => {
+      mockAxios.post.mockResolvedValue({ data: { id: 1 } });
+
+      await chatwootService.addInternalNote(options);
+
+      expect(mockAxios.post).toHaveBeenCalledWith(
+        expect.stringContaining('/conversations/99/messages'),
+        {
+          content: 'Internal note content',
+          message_type: 'outgoing',
+          private: true,
+        },
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'api_access_token': 'cw-token' }),
+        })
+      );
+    });
+
+    it('does not throw on error (swallows)', async () => {
+      mockAxios.post.mockRejectedValue(new Error('API down'));
+      await expect(chatwootService.addInternalNote(options)).resolves.not.toThrow();
+    });
+  });
+
+  describe('assignConversation', () => {
+    const options = {
+      chatwootApiToken: 'cw-token',
+      chatwootAccountId: 1,
+      conversationId: 99,
+      assigneeId: 5,
+    };
+
+    it('assigns conversation to agent', async () => {
+      mockAxios.post.mockResolvedValue({ data: {} });
+
+      await chatwootService.assignConversation(options);
+
+      expect(mockAxios.post).toHaveBeenCalledWith(
+        expect.stringContaining('/conversations/99/assignments'),
+        { assignee_id: 5 },
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'api_access_token': 'cw-token' }),
+        })
+      );
+    });
+
+    it('sends null assignee_id when not provided', async () => {
+      mockAxios.post.mockResolvedValue({ data: {} });
+
+      await chatwootService.assignConversation({
+        chatwootApiToken: 'cw-token',
+        chatwootAccountId: 1,
+        conversationId: 99,
+      });
+
+      expect(mockAxios.post).toHaveBeenCalledWith(
+        expect.any(String),
+        { assignee_id: null },
+        expect.any(Object)
+      );
+    });
+
+    it('does not throw on error (swallows)', async () => {
+      mockAxios.post.mockRejectedValue(new Error('API down'));
+      await expect(chatwootService.assignConversation(options)).resolves.not.toThrow();
+    });
+  });
 });

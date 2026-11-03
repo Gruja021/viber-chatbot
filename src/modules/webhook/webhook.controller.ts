@@ -4,6 +4,8 @@ import { conversationService } from '../conversation/conversation.service';
 import { chatwootService } from '../chatwoot/chatwoot.service';
 import { aiService } from '../ai/ai.service';
 import { viberService } from './viber.service';
+import { isWithinWorkingHours, matchesHandoverKeyword } from '../business-hours/business-hours.service';
+import { agentTimeoutService } from '../agent-timeout/agent-timeout.service';
 import {
   ViberWebhookEvent,
   isMessageEvent,
@@ -71,7 +73,7 @@ async function handleMessage(tenant: any, payload: ViberWebhookEvent) {
     sender.name
   );
 
-  // Save user message
+  // 1. Save user message
   await conversationService.addMessage(
     conversation.id,
     'user',
@@ -79,7 +81,37 @@ async function handleMessage(tenant: any, payload: ViberWebhookEvent) {
     payload.message_token
   );
 
-  // If in handover mode, forward to Chatwoot only
+  // 2. HANDOVER KEYWORD CHECK
+  const keywords = tenant.handover_keywords || [];
+  if (keywords.length > 0 && matchesHandoverKeyword(textContent, keywords)) {
+    // Activate handover for 24 hours
+    await conversationService.setHandover(conversation.id, 24 * 60);
+
+    // Ensure Chatwoot conversation exists
+    const chatwootConvId = await ensureChatwootConversation(tenant, conversation, sender);
+
+    // Send internal note in Chatwoot
+    if (tenant.chatwoot_api_token && chatwootConvId) {
+      await chatwootService.addInternalNote({
+        chatwootApiToken: tenant.chatwoot_api_token,
+        chatwootAccountId: tenant.chatwoot_account_id!,
+        conversationId: chatwootConvId,
+        content: `[Handover] Korisnik je zatražio razgovor sa agentom. Poruka: "${textContent}"`,
+      });
+    }
+
+    // Confirm to user
+    await viberService.sendTextMessage({
+      authToken: tenant.viber_auth_token,
+      receiverId: sender.id,
+      text: 'Vaš zahtev je prosleđen našem timu. Agent će vam se javiti u najkraćem roku.',
+      senderName: tenant.firm_name,
+    });
+
+    return;
+  }
+
+  // 3. HANDOVER MODE — forward to Chatwoot only
   if (conversation.is_handover) {
     if (tenant.chatwoot_api_token && conversation.chatwoot_conversation_id) {
       await chatwootService.sendMessage({
@@ -93,21 +125,82 @@ async function handleMessage(tenant: any, payload: ViberWebhookEvent) {
     return;
   }
 
-  // Create Chatwoot conversation if needed (for lead capture)
-  if (tenant.chatwoot_api_token && !conversation.chatwoot_conversation_id) {
-    const chatwootConvId = await chatwootService.createConversation({
-      chatwootApiToken: tenant.chatwoot_api_token,
-      chatwootAccountId: tenant.chatwoot_account_id!,
-      inboxId: tenant.chatwoot_inbox_id!,
-      contactName: sender.name,
-      identifier: sender.id,
-    });
+  // 4. WORKING HOURS — route to agent with 3-min timeout
+  if (isWithinWorkingHours(tenant) && tenant.chatwoot_api_token) {
+    const chatwootConvId = await ensureChatwootConversation(tenant, conversation, sender);
 
     if (chatwootConvId) {
-      await conversationService.setChatwootConversationId(conversation.id, chatwootConvId);
-      conversation.chatwoot_conversation_id = chatwootConvId;
+      // Forward message to Chatwoot
+      await chatwootService.sendMessage({
+        chatwootApiToken: tenant.chatwoot_api_token,
+        chatwootAccountId: tenant.chatwoot_account_id!,
+        conversationId: chatwootConvId,
+        content: textContent,
+        messageType: 'incoming',
+      });
+
+      // Set pending agent state
+      await conversationService.setPendingAgent(conversation.id);
+
+      // Start 3-minute timeout
+      await agentTimeoutService.startTimeout({
+        conversationId: conversation.id,
+        tenantId: tenant.id,
+        viberUserId: sender.id,
+        userMessage: textContent,
+      });
+
+      return;
     }
+    // If Chatwoot conversation couldn't be created, fall through to AI
   }
+
+  // 5. DEFAULT — AI response (off-hours, no Chatwoot, or fallback)
+  await handleAIResponse(tenant, conversation, sender, textContent);
+}
+
+/**
+ * Ensure a Chatwoot conversation exists. Creates one if needed.
+ * Returns the chatwoot_conversation_id or null.
+ */
+async function ensureChatwootConversation(
+  tenant: any,
+  conversation: any,
+  sender: any
+): Promise<number | null> {
+  if (!tenant.chatwoot_api_token) return null;
+
+  if (conversation.chatwoot_conversation_id) {
+    return conversation.chatwoot_conversation_id;
+  }
+
+  const chatwootConvId = await chatwootService.createConversation({
+    chatwootApiToken: tenant.chatwoot_api_token,
+    chatwootAccountId: tenant.chatwoot_account_id!,
+    inboxId: tenant.chatwoot_inbox_id!,
+    contactName: sender.name,
+    identifier: sender.id,
+  });
+
+  if (chatwootConvId) {
+    await conversationService.setChatwootConversationId(conversation.id, chatwootConvId);
+    conversation.chatwoot_conversation_id = chatwootConvId;
+  }
+
+  return chatwootConvId;
+}
+
+/**
+ * Generate AI response and send via Viber. Also logs to Chatwoot.
+ */
+async function handleAIResponse(
+  tenant: any,
+  conversation: any,
+  sender: any,
+  textContent: string
+): Promise<void> {
+  // Create Chatwoot conversation if needed (for lead capture)
+  await ensureChatwootConversation(tenant, conversation, sender);
 
   // Forward message to Chatwoot for logging
   if (tenant.chatwoot_api_token && conversation.chatwoot_conversation_id) {

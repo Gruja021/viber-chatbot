@@ -6,6 +6,8 @@ export interface Conversation {
   chatwoot_conversation_id: number | null;
   is_handover: boolean;
   handover_until: Date | null;
+  pending_agent_response: boolean;
+  agent_routed_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }

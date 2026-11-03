@@ -15,6 +15,8 @@ const makeConversation = (overrides: Partial<Conversation> = {}): Conversation =
   chatwoot_conversation_id: null,
   is_handover: false,
   handover_until: null,
+  pending_agent_response: false,
+  agent_routed_at: null,
   created_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
   updated_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
   ...overrides,
@@ -114,6 +116,33 @@ describe('conversationService', () => {
       mockRepo.clearHandover.mockResolvedValue(undefined);
       await conversationService.clearHandover('conv-1');
       expect(mockRepo.clearHandover).toHaveBeenCalledWith('conv-1');
+    });
+
+    it('setChatwootConversationId delegates to repository', async () => {
+      mockRepo.setChatwootConversationId.mockResolvedValue(undefined);
+      await conversationService.setChatwootConversationId('conv-1', 42);
+      expect(mockRepo.setChatwootConversationId).toHaveBeenCalledWith('conv-1', 42);
+    });
+
+    it('setPendingAgent delegates to repository', async () => {
+      mockRepo.setPendingAgent.mockResolvedValue(undefined);
+      await conversationService.setPendingAgent('conv-1');
+      expect(mockRepo.setPendingAgent).toHaveBeenCalledWith('conv-1');
+    });
+
+    it('clearPendingAgent delegates to repository', async () => {
+      mockRepo.clearPendingAgent.mockResolvedValue(undefined);
+      await conversationService.clearPendingAgent('conv-1');
+      expect(mockRepo.clearPendingAgent).toHaveBeenCalledWith('conv-1');
+    });
+
+    it('findByChatwootConversationId delegates to repository', async () => {
+      const conv = makeConversation({ chatwoot_conversation_id: 42 });
+      mockRepo.findByChatwootConversationId.mockResolvedValue(conv);
+
+      const result = await conversationService.findByChatwootConversationId(42);
+      expect(result).toEqual(conv);
+      expect(mockRepo.findByChatwootConversationId).toHaveBeenCalledWith(42);
     });
   });
 });

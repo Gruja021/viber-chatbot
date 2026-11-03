@@ -34,8 +34,8 @@ export const tenantRepository = {
     const { rows } = await pool.query<Tenant>(
       `INSERT INTO tenants (slug, firm_name, viber_auth_token, database_type,
         database_credentials, system_prompt, chatwoot_account_id,
-        chatwoot_inbox_id, chatwoot_api_token)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        chatwoot_inbox_id, chatwoot_api_token, timezone, working_hours, handover_keywords)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [
         input.slug,
@@ -47,6 +47,9 @@ export const tenantRepository = {
         input.chatwoot_account_id || null,
         input.chatwoot_inbox_id || null,
         input.chatwoot_api_token || null,
+        input.timezone || 'Europe/Belgrade',
+        JSON.stringify(input.working_hours || {}),
+        input.handover_keywords || ['zelim da pricam sa covekom', 'hocu operatera', 'agent', 'covek', 'operater'],
       ]
     );
     return rows[0];
@@ -92,6 +95,18 @@ export const tenantRepository = {
     if (input.chatwoot_api_token !== undefined) {
       fields.push(`chatwoot_api_token = $${idx++}`);
       values.push(input.chatwoot_api_token);
+    }
+    if (input.timezone !== undefined) {
+      fields.push(`timezone = $${idx++}`);
+      values.push(input.timezone);
+    }
+    if (input.working_hours !== undefined) {
+      fields.push(`working_hours = $${idx++}`);
+      values.push(JSON.stringify(input.working_hours));
+    }
+    if (input.handover_keywords !== undefined) {
+      fields.push(`handover_keywords = $${idx++}`);
+      values.push(input.handover_keywords);
     }
     if (input.status !== undefined) {
       fields.push(`status = $${idx++}`);

@@ -76,6 +76,56 @@ describe('conversationRepository', () => {
     });
   });
 
+  describe('setPendingAgent', () => {
+    it('sets pending_agent_response to TRUE and agent_routed_at', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+      await conversationRepository.setPendingAgent('conv-1');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('pending_agent_response = TRUE'),
+        ['conv-1']
+      );
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('agent_routed_at = NOW()'),
+        expect.any(Array)
+      );
+    });
+  });
+
+  describe('clearPendingAgent', () => {
+    it('clears pending_agent_response and agent_routed_at', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+      await conversationRepository.clearPendingAgent('conv-1');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('pending_agent_response = FALSE'),
+        ['conv-1']
+      );
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('agent_routed_at = NULL'),
+        expect.any(Array)
+      );
+    });
+  });
+
+  describe('findByChatwootConversationId', () => {
+    it('returns conversation when found', async () => {
+      const conv = { id: 'conv-1', chatwoot_conversation_id: 42 };
+      mockQuery.mockResolvedValue({ rows: [conv] });
+
+      const result = await conversationRepository.findByChatwootConversationId(42);
+      expect(result).toEqual(conv);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('chatwoot_conversation_id = $1'),
+        [42]
+      );
+    });
+
+    it('returns null when not found', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+      const result = await conversationRepository.findByChatwootConversationId(999);
+      expect(result).toBeNull();
+    });
+  });
+
   describe('addMessage', () => {
     it('inserts message and returns it', async () => {
       const msg = { id: 'msg-1', conversation_id: 'conv-1', role: 'user', content: 'Hello' };

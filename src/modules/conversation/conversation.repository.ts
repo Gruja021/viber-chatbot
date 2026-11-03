@@ -47,6 +47,28 @@ export const conversationRepository = {
     );
   },
 
+  async setPendingAgent(id: string): Promise<void> {
+    await pool.query(
+      'UPDATE conversations SET pending_agent_response = TRUE, agent_routed_at = NOW(), updated_at = NOW() WHERE id = $1',
+      [id]
+    );
+  },
+
+  async clearPendingAgent(id: string): Promise<void> {
+    await pool.query(
+      'UPDATE conversations SET pending_agent_response = FALSE, agent_routed_at = NULL, updated_at = NOW() WHERE id = $1',
+      [id]
+    );
+  },
+
+  async findByChatwootConversationId(chatwootConversationId: number): Promise<Conversation | null> {
+    const { rows } = await pool.query<Conversation>(
+      'SELECT * FROM conversations WHERE chatwoot_conversation_id = $1',
+      [chatwootConversationId]
+    );
+    return rows[0] || null;
+  },
+
   async addMessage(
     conversationId: string,
     role: MessageRole,

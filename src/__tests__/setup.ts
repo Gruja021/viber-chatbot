@@ -32,6 +32,9 @@ jest.mock('../config/redis', () => {
     del: jest.fn().mockResolvedValue(1),
     ping: jest.fn().mockResolvedValue('PONG'),
     call: jest.fn().mockResolvedValue(null),
+    config: jest.fn().mockResolvedValue('OK'),
+    subscribe: jest.fn().mockResolvedValue(undefined),
+    on: jest.fn(),
     disconnect: jest.fn(),
   };
   return {
