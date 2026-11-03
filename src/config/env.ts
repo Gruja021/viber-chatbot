@@ -22,4 +22,5 @@ export const env = {
   ADMIN_API_TOKEN: required('ADMIN_API_TOKEN'),
   ENCRYPTION_KEY: required('ENCRYPTION_KEY'),
   WEBHOOK_BASE_URL: required('WEBHOOK_BASE_URL'),
+  OPENAI_API_KEY: required('OPENAI_API_KEY'),
 } as const;

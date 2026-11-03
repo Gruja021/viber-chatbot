@@ -5,6 +5,7 @@ process.env.ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef01
 process.env.WEBHOOK_BASE_URL = 'https://test.example.com';
 process.env.REDIS_URL = 'redis://localhost:6379';
 process.env.NODE_ENV = 'test';
+process.env.OPENAI_API_KEY = 'sk-test-key';
 
 // Mock database pool
 jest.mock('../config/database', () => {

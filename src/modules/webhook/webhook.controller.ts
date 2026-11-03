@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { logger } from '../../config/logger';
 import { conversationService } from '../conversation/conversation.service';
 import { chatwootService } from '../chatwoot/chatwoot.service';
+import { aiService } from '../ai/ai.service';
 import { viberService } from './viber.service';
 import {
   ViberWebhookEvent,
@@ -119,9 +120,9 @@ async function handleMessage(tenant: any, payload: ViberWebhookEvent) {
     });
   }
 
-  // TODO: Phase 2 — AI response will go here
-  // For now, echo a placeholder response
-  const replyText = 'Hvala na poruci! AI odgovor će biti dostupan uskoro. (Faza 2)';
+  // Generate AI response
+  const recentMessages = await conversationService.getRecentMessages(conversation.id, 20);
+  const replyText = await aiService.generateResponse(tenant, recentMessages, textContent);
 
   await viberService.sendTextMessage({
     authToken: tenant.viber_auth_token,
