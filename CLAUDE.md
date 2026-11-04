@@ -4,7 +4,7 @@
 
 Multi-tenant AI chatbot sistem za Viber i Telegram platforme. SaaS rešenje koje omogućava malim i srednjim firmama da imaju AI-powered korisničku podršku putem messaging platformi, sa dinamičkim rutiranjem, CRM integracijom i fallback-om na ljudskog agenta.
 
-**Status:** Implementirano kroz 5 faza — multi-tenant osnova, AI integracija, biznis logika, onboarding automatizacija, Telegram podrška. Docker containerization i smoke testovi.
+**Status:** Implementirano kroz 5 faza — multi-tenant osnova, AI integracija, biznis logika, onboarding automatizacija, Telegram podrška. Docker containerization, smoke testovi i GitHub Actions CI/CD.
 
 ## Arhitektura
 
@@ -26,6 +26,7 @@ Multi-tenant AI chatbot sistem za Viber i Telegram platforme. SaaS rešenje koje
 - **Data sources:** Google Sheets API, WooCommerce REST API, SQL konektori
 - **Containerization:** Docker / Docker Compose
 - **Testing:** Jest (31 suite, 346+ testova)
+- **CI/CD:** GitHub Actions (build + test + Docker build na svaki push/PR)
 
 ## Ključni koncepti
 
@@ -56,6 +57,7 @@ Multi-tenant AI chatbot sistem za Viber i Telegram platforme. SaaS rešenje koje
 | 3    | Biznis logika — radno vreme, human handover mehanizam, agent timeout            | ✅     |
 | 4    | Onboarding automatizacija — setup klijenta za < 30 min, health checks, Docker  | ✅     |
 | 5    | Telegram podrška — platform-agnostična arhitektura, Telegram Bot API            | ✅     |
+| 6    | CI/CD — GitHub Actions pipeline (build, test, Docker verify)                    | ✅     |
 
 ## Važne napomene
 
