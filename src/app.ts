@@ -13,7 +13,10 @@ import { checkRedisConnection } from './config/redis';
 const app = express();
 
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:4200'],
+  credentials: true,
+}));
 
 // Raw body capture for Viber signature verification — must come before express.json()
 app.use('/api/viber', express.json({

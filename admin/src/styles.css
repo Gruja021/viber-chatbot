@@ -1,0 +1,24 @@
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+  background-color: #fafafa;
+}
+
+.page-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.mat-mdc-card {
+  margin-bottom: 16px;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.full-width {
+  width: 100%;
+}
