@@ -1,8 +1,11 @@
+import { Platform } from '../../types/platform';
+
 export interface Conversation {
   id: string;
   tenant_id: string;
-  viber_user_id: string;
-  viber_user_name: string | null;
+  platform: Platform;
+  platform_user_id: string;
+  platform_user_name: string | null;
   chatwoot_conversation_id: number | null;
   is_handover: boolean;
   handover_until: Date | null;
@@ -19,7 +22,7 @@ export interface Message {
   conversation_id: string;
   role: MessageRole;
   content: string;
-  viber_message_token: number | null;
+  platform_message_id: string | null;
   metadata: Record<string, unknown>;
   created_at: Date;
 }

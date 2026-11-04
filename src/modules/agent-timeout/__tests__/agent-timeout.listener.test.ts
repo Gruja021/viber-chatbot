@@ -2,6 +2,7 @@ import { agentTimeoutService } from '../agent-timeout.service';
 import { conversationService } from '../../conversation/conversation.service';
 import { aiService } from '../../ai/ai.service';
 import { viberService } from '../../webhook/viber.service';
+import { telegramService } from '../../webhook/telegram.service';
 import { chatwootService } from '../../chatwoot/chatwoot.service';
 import { tenantService } from '../../tenant/tenant.service';
 
@@ -9,6 +10,7 @@ jest.mock('../agent-timeout.service');
 jest.mock('../../conversation/conversation.service');
 jest.mock('../../ai/ai.service');
 jest.mock('../../webhook/viber.service');
+jest.mock('../../webhook/telegram.service');
 jest.mock('../../chatwoot/chatwoot.service');
 jest.mock('../../tenant/tenant.service');
 
@@ -31,6 +33,7 @@ const mockAgentTimeout = agentTimeoutService as jest.Mocked<typeof agentTimeoutS
 const mockConversationService = conversationService as jest.Mocked<typeof conversationService>;
 const mockAiService = aiService as jest.Mocked<typeof aiService>;
 const mockViberService = viberService as jest.Mocked<typeof viberService>;
+const mockTelegramService = telegramService as jest.Mocked<typeof telegramService>;
 const mockChatwootService = chatwootService as jest.Mocked<typeof chatwootService>;
 const mockTenantService = tenantService as jest.Mocked<typeof tenantService>;
 
@@ -106,7 +109,8 @@ describe('agent-timeout.listener', () => {
     const timeoutData = {
       conversationId: 'conv-1',
       tenantId: 't-1',
-      viberUserId: 'user-1',
+      platform: 'viber' as const,
+      platformUserId: 'user-1',
       userMessage: 'Trebam pomoć',
     };
 
@@ -115,6 +119,7 @@ describe('agent-timeout.listener', () => {
       slug: 'test',
       firm_name: 'Test Firm',
       viber_auth_token: 'vtoken',
+      telegram_bot_token: null as string | null,
       chatwoot_api_token: null as string | null,
       chatwoot_account_id: null as number | null,
       chatwoot_inbox_id: null,
@@ -140,7 +145,7 @@ describe('agent-timeout.listener', () => {
       expect(mockAiService.generateResponse).not.toHaveBeenCalled();
     });
 
-    it('full AI fallback flow: clears pending, generates AI, sends Viber, saves message', async () => {
+    it('full AI fallback flow for Viber: clears pending, generates AI, sends Viber, saves message', async () => {
       mockAgentTimeout.getTimeoutData.mockResolvedValue(timeoutData);
       mockConversationService.clearPendingAgent.mockResolvedValue(undefined);
       mockTenantService.getById.mockResolvedValue(tenant as any);
@@ -151,28 +156,48 @@ describe('agent-timeout.listener', () => {
 
       await messageHandler('__keyevent@0__:expired', 'agent_timeout:conv-1');
 
-      // Clears pending
       expect(mockConversationService.clearPendingAgent).toHaveBeenCalledWith('conv-1');
-
-      // Generates AI response
       expect(mockAiService.generateResponse).toHaveBeenCalledWith(
         tenant,
         [],
         'Trebam pomoć'
       );
-
-      // Sends to Viber
       expect(mockViberService.sendTextMessage).toHaveBeenCalledWith({
         authToken: 'vtoken',
         receiverId: 'user-1',
         text: 'AI fallback odgovor',
         senderName: 'Test Firm',
       });
-
-      // Saves assistant message
       expect(mockConversationService.addMessage).toHaveBeenCalledWith(
         'conv-1', 'assistant', 'AI fallback odgovor'
       );
+    });
+
+    it('full AI fallback flow for Telegram: sends via Telegram service', async () => {
+      const telegramTimeoutData = {
+        ...timeoutData,
+        platform: 'telegram' as const,
+        platformUserId: '789',
+      };
+      const telegramTenant = {
+        ...tenant,
+        telegram_bot_token: 'tg-token',
+      };
+
+      mockAgentTimeout.getTimeoutData.mockResolvedValue(telegramTimeoutData);
+      mockConversationService.clearPendingAgent.mockResolvedValue(undefined);
+      mockTenantService.getById.mockResolvedValue(telegramTenant as any);
+      mockConversationService.getRecentMessages.mockResolvedValue([]);
+      mockAiService.generateResponse.mockResolvedValue('TG AI fallback');
+      mockTelegramService.sendTextMessage.mockResolvedValue(undefined);
+      mockConversationService.addMessage.mockResolvedValue({} as any);
+
+      await messageHandler('__keyevent@0__:expired', 'agent_timeout:conv-1');
+
+      expect(mockTelegramService.sendTextMessage).toHaveBeenCalledWith(
+        'tg-token', '789', 'TG AI fallback'
+      );
+      expect(mockViberService.sendTextMessage).not.toHaveBeenCalled();
     });
 
     it('logs AI response to Chatwoot when available', async () => {
@@ -248,7 +273,6 @@ describe('agent-timeout.listener', () => {
     it('catches errors in handleTimeoutExpiry without crashing', async () => {
       mockAgentTimeout.getTimeoutData.mockRejectedValue(new Error('Redis down'));
 
-      // Should not throw
       await expect(
         messageHandler('__keyevent@0__:expired', 'agent_timeout:conv-1')
       ).resolves.not.toThrow();

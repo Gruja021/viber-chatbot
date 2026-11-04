@@ -30,6 +30,7 @@ function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     slug: 'test',
     firm_name: 'Test Firm',
     viber_auth_token: 'token',
+    telegram_bot_token: null,
     database_type: null,
     database_credentials: null,
     system_prompt: 'You are a helpful assistant for Test Firm.',
@@ -52,7 +53,7 @@ function makeMessage(role: 'user' | 'assistant', content: string): Message {
     conversation_id: 'c-1',
     role,
     content,
-    viber_message_token: null,
+    platform_message_id: null,
     metadata: {},
     created_at: new Date(),
   };

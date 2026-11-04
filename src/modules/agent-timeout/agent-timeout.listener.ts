@@ -5,6 +5,7 @@ import { agentTimeoutService } from './agent-timeout.service';
 import { conversationService } from '../conversation/conversation.service';
 import { aiService } from '../ai/ai.service';
 import { viberService } from '../webhook/viber.service';
+import { telegramService } from '../webhook/telegram.service';
 import { chatwootService } from '../chatwoot/chatwoot.service';
 import { tenantService } from '../tenant/tenant.service';
 
@@ -53,6 +54,24 @@ export async function startAgentTimeoutListener(): Promise<void> {
   logger.info('Agent timeout listener started');
 }
 
+async function sendPlatformMessage(
+  tenant: any,
+  platform: string,
+  platformUserId: string,
+  text: string
+): Promise<void> {
+  if (platform === 'telegram' && tenant.telegram_bot_token) {
+    await telegramService.sendTextMessage(tenant.telegram_bot_token, platformUserId, text);
+  } else {
+    await viberService.sendTextMessage({
+      authToken: tenant.viber_auth_token,
+      receiverId: platformUserId,
+      text,
+      senderName: tenant.firm_name,
+    });
+  }
+}
+
 async function handleTimeoutExpiry(conversationId: string): Promise<void> {
   // 1. Get timeout data
   const data = await agentTimeoutService.getTimeoutData(conversationId);
@@ -75,13 +94,8 @@ async function handleTimeoutExpiry(conversationId: string): Promise<void> {
   const recentMessages = await conversationService.getRecentMessages(data.conversationId, 20);
   const replyText = await aiService.generateResponse(tenant, recentMessages, data.userMessage);
 
-  // 5. Send to Viber
-  await viberService.sendTextMessage({
-    authToken: tenant.viber_auth_token,
-    receiverId: data.viberUserId,
-    text: replyText,
-    senderName: tenant.firm_name,
-  });
+  // 5. Send to correct platform
+  await sendPlatformMessage(tenant, data.platform, data.platformUserId, replyText);
 
   // 6. Save assistant message
   await conversationService.addMessage(data.conversationId, 'assistant', replyText);
@@ -90,7 +104,8 @@ async function handleTimeoutExpiry(conversationId: string): Promise<void> {
   if (tenant.chatwoot_api_token) {
     const conversation = await conversationService.getOrCreate(
       data.tenantId,
-      data.viberUserId,
+      data.platform,
+      data.platformUserId,
       null
     );
 

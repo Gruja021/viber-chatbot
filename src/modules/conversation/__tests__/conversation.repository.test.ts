@@ -10,34 +10,58 @@ describe('conversationRepository', () => {
 
   describe('findByTenantAndUser', () => {
     it('returns conversation when found', async () => {
-      const conv = { id: 'conv-1', tenant_id: 't-1', viber_user_id: 'v-1' };
+      const conv = { id: 'conv-1', tenant_id: 't-1', platform: 'viber', platform_user_id: 'v-1' };
       mockQuery.mockResolvedValue({ rows: [conv] });
 
-      const result = await conversationRepository.findByTenantAndUser('t-1', 'v-1');
+      const result = await conversationRepository.findByTenantAndUser('t-1', 'viber', 'v-1');
       expect(result).toEqual(conv);
       expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('WHERE tenant_id = $1 AND viber_user_id = $2'),
-        ['t-1', 'v-1']
+        expect.stringContaining('WHERE tenant_id = $1 AND platform = $2 AND platform_user_id = $3'),
+        ['t-1', 'viber', 'v-1']
       );
     });
 
     it('returns null when not found', async () => {
       mockQuery.mockResolvedValue({ rows: [] });
-      const result = await conversationRepository.findByTenantAndUser('t-1', 'v-x');
+      const result = await conversationRepository.findByTenantAndUser('t-1', 'viber', 'v-x');
       expect(result).toBeNull();
+    });
+
+    it('works with telegram platform', async () => {
+      const conv = { id: 'conv-2', tenant_id: 't-1', platform: 'telegram', platform_user_id: '123' };
+      mockQuery.mockResolvedValue({ rows: [conv] });
+
+      const result = await conversationRepository.findByTenantAndUser('t-1', 'telegram', '123');
+      expect(result).toEqual(conv);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.any(String),
+        ['t-1', 'telegram', '123']
+      );
     });
   });
 
   describe('create', () => {
     it('inserts with upsert and returns conversation', async () => {
-      const conv = { id: 'conv-1', tenant_id: 't-1', viber_user_id: 'v-1', viber_user_name: 'User' };
+      const conv = { id: 'conv-1', tenant_id: 't-1', platform: 'viber', platform_user_id: 'v-1', platform_user_name: 'User' };
       mockQuery.mockResolvedValue({ rows: [conv] });
 
-      const result = await conversationRepository.create('t-1', 'v-1', 'User');
+      const result = await conversationRepository.create('t-1', 'viber', 'v-1', 'User');
       expect(result).toEqual(conv);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('ON CONFLICT'),
-        ['t-1', 'v-1', 'User']
+        ['t-1', 'viber', 'v-1', 'User']
+      );
+    });
+
+    it('creates Telegram conversation', async () => {
+      const conv = { id: 'conv-2', platform: 'telegram', platform_user_id: '456' };
+      mockQuery.mockResolvedValue({ rows: [conv] });
+
+      const result = await conversationRepository.create('t-1', 'telegram', '456', 'TG User');
+      expect(result).toEqual(conv);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('ON CONFLICT'),
+        ['t-1', 'telegram', '456', 'TG User']
       );
     });
   });
@@ -127,15 +151,15 @@ describe('conversationRepository', () => {
   });
 
   describe('addMessage', () => {
-    it('inserts message and returns it', async () => {
+    it('inserts message with platform_message_id and returns it', async () => {
       const msg = { id: 'msg-1', conversation_id: 'conv-1', role: 'user', content: 'Hello' };
       mockQuery.mockResolvedValue({ rows: [msg] });
 
-      const result = await conversationRepository.addMessage('conv-1', 'user', 'Hello', 12345, { source: 'viber' });
+      const result = await conversationRepository.addMessage('conv-1', 'user', 'Hello', '12345', { source: 'viber' });
       expect(result).toEqual(msg);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO messages'),
-        ['conv-1', 'user', 'Hello', 12345, JSON.stringify({ source: 'viber' })]
+        ['conv-1', 'user', 'Hello', '12345', JSON.stringify({ source: 'viber' })]
       );
     });
 

@@ -37,6 +37,11 @@ router.post('/register-webhook', async (req: Request, res: Response, next: NextF
       return;
     }
 
+    if (!tenant.viber_auth_token) {
+      res.status(400).json({ error: 'Tenant has no viber_auth_token configured' });
+      return;
+    }
+
     const webhookUrl = `${env.WEBHOOK_BASE_URL}/api/viber/webhook/${tenant.slug}`;
     await viberService.setWebhook(tenant.viber_auth_token, webhookUrl);
 
@@ -64,6 +69,11 @@ router.post('/test-message', async (req: Request, res: Response, next: NextFunct
     const tenant = await tenantService.getById(tenant_id);
     if (!tenant) {
       res.status(404).json({ error: 'Tenant not found' });
+      return;
+    }
+
+    if (!tenant.viber_auth_token) {
+      res.status(400).json({ error: 'Tenant has no viber_auth_token configured' });
       return;
     }
 

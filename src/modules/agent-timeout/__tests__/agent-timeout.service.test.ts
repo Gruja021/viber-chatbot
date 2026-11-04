@@ -11,7 +11,8 @@ describe('agent-timeout.service', () => {
   const testData: AgentTimeoutData = {
     conversationId: 'conv-1',
     tenantId: 't-1',
-    viberUserId: 'user-1',
+    platform: 'viber',
+    platformUserId: 'user-1',
     userMessage: 'Zdravo, trebam pomoć',
   };
 

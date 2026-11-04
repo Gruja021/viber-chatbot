@@ -2,16 +2,19 @@ import { handleChatwootWebhook } from '../chatwoot.webhook.controller';
 import { conversationService } from '../../conversation/conversation.service';
 import { agentTimeoutService } from '../../agent-timeout/agent-timeout.service';
 import { viberService } from '../../webhook/viber.service';
+import { telegramService } from '../../webhook/telegram.service';
 import { tenantService } from '../../tenant/tenant.service';
 
 jest.mock('../../conversation/conversation.service');
 jest.mock('../../agent-timeout/agent-timeout.service');
 jest.mock('../../webhook/viber.service');
+jest.mock('../../webhook/telegram.service');
 jest.mock('../../tenant/tenant.service');
 
 const mockConversationService = conversationService as jest.Mocked<typeof conversationService>;
 const mockAgentTimeoutService = agentTimeoutService as jest.Mocked<typeof agentTimeoutService>;
 const mockViberService = viberService as jest.Mocked<typeof viberService>;
+const mockTelegramService = telegramService as jest.Mocked<typeof telegramService>;
 const mockTenantService = tenantService as jest.Mocked<typeof tenantService>;
 
 const makeRes = () => {
@@ -74,12 +77,13 @@ describe('chatwoot.webhook.controller', () => {
     expect(mockConversationService.findByChatwootConversationId).not.toHaveBeenCalled();
   });
 
-  it('processes agent response: cancels timeout, forwards to Viber, saves message', async () => {
+  it('processes agent response for Viber: cancels timeout, forwards to Viber, saves message', async () => {
     const conversation = {
       id: 'conv-1',
       tenant_id: 't-1',
-      viber_user_id: 'user-1',
-      viber_user_name: 'User',
+      platform: 'viber' as const,
+      platform_user_id: 'user-1',
+      platform_user_name: 'User',
       chatwoot_conversation_id: 42,
       is_handover: false,
       handover_until: null,
@@ -94,6 +98,7 @@ describe('chatwoot.webhook.controller', () => {
       slug: 'test',
       firm_name: 'Test Firm',
       viber_auth_token: 'vtoken',
+      telegram_bot_token: null,
     };
 
     mockConversationService.findByChatwootConversationId.mockResolvedValue(conversation as any);
@@ -112,13 +117,8 @@ describe('chatwoot.webhook.controller', () => {
       content: 'Agent reply here',
     }), res);
 
-    // Should cancel timeout
     expect(mockAgentTimeoutService.cancelTimeout).toHaveBeenCalledWith('conv-1');
-
-    // Should clear pending
     expect(mockConversationService.clearPendingAgent).toHaveBeenCalledWith('conv-1');
-
-    // Should forward to Viber
     expect(mockViberService.sendTextMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         authToken: 'vtoken',
@@ -127,10 +127,57 @@ describe('chatwoot.webhook.controller', () => {
         senderName: 'Test Firm',
       })
     );
-
-    // Should save message
     expect(mockConversationService.addMessage).toHaveBeenCalledWith(
       'conv-1', 'assistant', 'Agent reply here', null, { source: 'chatwoot_agent' }
+    );
+  });
+
+  it('processes agent response for Telegram: forwards to Telegram', async () => {
+    const conversation = {
+      id: 'conv-2',
+      tenant_id: 't-1',
+      platform: 'telegram' as const,
+      platform_user_id: '789',
+      platform_user_name: 'TG User',
+      chatwoot_conversation_id: 55,
+      is_handover: false,
+      handover_until: null,
+      pending_agent_response: true,
+      agent_routed_at: new Date(),
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
+
+    const tenant = {
+      id: 't-1',
+      slug: 'test',
+      firm_name: 'Test Firm',
+      viber_auth_token: null,
+      telegram_bot_token: 'tg-token',
+    };
+
+    mockConversationService.findByChatwootConversationId.mockResolvedValue(conversation as any);
+    mockAgentTimeoutService.cancelTimeout.mockResolvedValue(undefined);
+    mockConversationService.clearPendingAgent.mockResolvedValue(undefined);
+    mockTenantService.getById.mockResolvedValue(tenant as any);
+    mockTelegramService.sendTextMessage.mockResolvedValue(undefined);
+    mockConversationService.addMessage.mockResolvedValue({} as any);
+
+    const res = makeRes();
+    await handleChatwootWebhook(makeReq({
+      event: 'message_created',
+      message_type: 'outgoing',
+      sender: { type: 'user', name: 'Agent' },
+      conversation: { id: 55 },
+      content: 'Telegram agent reply',
+    }), res);
+
+    expect(mockTelegramService.sendTextMessage).toHaveBeenCalledWith(
+      'tg-token', '789', 'Telegram agent reply'
+    );
+    expect(mockViberService.sendTextMessage).not.toHaveBeenCalled();
+    expect(mockConversationService.addMessage).toHaveBeenCalledWith(
+      'conv-2', 'assistant', 'Telegram agent reply', null, { source: 'chatwoot_agent' }
     );
   });
 
@@ -148,5 +195,6 @@ describe('chatwoot.webhook.controller', () => {
 
     expect(mockAgentTimeoutService.cancelTimeout).not.toHaveBeenCalled();
     expect(mockViberService.sendTextMessage).not.toHaveBeenCalled();
+    expect(mockTelegramService.sendTextMessage).not.toHaveBeenCalled();
   });
 });

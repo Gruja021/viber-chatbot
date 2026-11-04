@@ -79,7 +79,24 @@ describe('tenantRepository', () => {
       expect(mockEncrypt).not.toHaveBeenCalled();
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO tenants'),
-        expect.arrayContaining([input.slug, input.firm_name, input.viber_auth_token, null, null])
+        expect.arrayContaining([input.slug, input.firm_name, 'vtoken', null, null])
+      );
+    });
+
+    it('creates tenant with telegram_bot_token', async () => {
+      const input = {
+        slug: 'tg-tenant',
+        firm_name: 'TG Firm',
+        telegram_bot_token: 'tg-token-123',
+      };
+      const created = { id: 'uuid-tg', ...input };
+      mockQuery.mockResolvedValue({ rows: [created] });
+
+      const result = await tenantRepository.create(input);
+      expect(result).toEqual(created);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO tenants'),
+        expect.arrayContaining([input.slug, input.firm_name, null, 'tg-token-123'])
       );
     });
 
@@ -152,6 +169,15 @@ describe('tenantRepository', () => {
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('viber_auth_token = $1'),
         ['new-token', 'uuid-1']
+      );
+    });
+
+    it('updates telegram_bot_token field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { telegram_bot_token: 'tg-new' });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('telegram_bot_token = $1'),
+        ['tg-new', 'uuid-1']
       );
     });
 
@@ -246,6 +272,7 @@ describe('tenantRepository', () => {
         slug: 'slug',
         firm_name: 'name',
         viber_auth_token: 'token',
+        telegram_bot_token: 'tg-token',
         database_type: 'postgresql',
         database_credentials: '{}',
         system_prompt: 'prompt',
@@ -259,11 +286,11 @@ describe('tenantRepository', () => {
       });
 
       const [query, values] = mockQuery.mock.calls[0];
-      // All 13 fields + id = 14 values
-      expect(values).toHaveLength(14);
+      // All 14 fields + id = 15 values
+      expect(values).toHaveLength(15);
       expect(query).toContain('slug = $1');
-      expect(query).toContain('status = $13');
-      expect(query).toContain('WHERE id = $14');
+      expect(query).toContain('status = $14');
+      expect(query).toContain('WHERE id = $15');
       expect(query).toContain('updated_at = NOW()');
     });
 

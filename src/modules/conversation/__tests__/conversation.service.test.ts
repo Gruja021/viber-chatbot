@@ -10,8 +10,9 @@ const mockRedis = redis as jest.Mocked<typeof redis>;
 const makeConversation = (overrides: Partial<Conversation> = {}): Conversation => ({
   id: 'conv-1',
   tenant_id: 't-1',
-  viber_user_id: 'v-1',
-  viber_user_name: 'Test User',
+  platform: 'viber',
+  platform_user_id: 'v-1',
+  platform_user_name: 'Test User',
   chatwoot_conversation_id: null,
   is_handover: false,
   handover_until: null,
@@ -32,7 +33,7 @@ describe('conversationService', () => {
       const conv = makeConversation();
       mockRedis.get.mockResolvedValue(JSON.stringify(conv));
 
-      const result = await conversationService.getOrCreate('t-1', 'v-1', 'Test User');
+      const result = await conversationService.getOrCreate('t-1', 'viber', 'v-1', 'Test User');
       expect(result).toEqual(conv);
       expect(mockRepo.create).not.toHaveBeenCalled();
     });
@@ -42,24 +43,24 @@ describe('conversationService', () => {
       mockRedis.get.mockResolvedValue(null);
       mockRepo.create.mockResolvedValue(conv);
 
-      const result = await conversationService.getOrCreate('t-1', 'v-1', 'Test User');
+      const result = await conversationService.getOrCreate('t-1', 'viber', 'v-1', 'Test User');
       expect(result).toEqual(conv);
       expect(mockRedis.setex).toHaveBeenCalledWith(
-        'conv:t-1:v-1',
+        'conv:t-1:viber:v-1',
         1800,
         JSON.stringify(conv)
       );
     });
 
     it('clears expired handover on cache hit', async () => {
-      const pastDate = new Date(Date.now() - 60000); // 1 minute ago
+      const pastDate = new Date(Date.now() - 60000);
       const conv = makeConversation({
         is_handover: true,
         handover_until: pastDate,
       });
       mockRedis.get.mockResolvedValue(JSON.stringify(conv));
 
-      const result = await conversationService.getOrCreate('t-1', 'v-1', 'Test User');
+      const result = await conversationService.getOrCreate('t-1', 'viber', 'v-1', 'Test User');
       expect(result.is_handover).toBe(false);
       expect(result.handover_until).toBeNull();
       expect(mockRepo.clearHandover).toHaveBeenCalledWith('conv-1');
@@ -67,16 +68,29 @@ describe('conversationService', () => {
     });
 
     it('does not clear handover if still active', async () => {
-      const futureDate = new Date(Date.now() + 3600000); // 1 hour from now
+      const futureDate = new Date(Date.now() + 3600000);
       const conv = makeConversation({
         is_handover: true,
         handover_until: futureDate,
       });
       mockRedis.get.mockResolvedValue(JSON.stringify(conv));
 
-      const result = await conversationService.getOrCreate('t-1', 'v-1', 'Test User');
+      const result = await conversationService.getOrCreate('t-1', 'viber', 'v-1', 'Test User');
       expect(result.is_handover).toBe(true);
       expect(mockRepo.clearHandover).not.toHaveBeenCalled();
+    });
+
+    it('uses platform in cache key for Telegram', async () => {
+      const conv = makeConversation({ platform: 'telegram', platform_user_id: '123' });
+      mockRedis.get.mockResolvedValue(null);
+      mockRepo.create.mockResolvedValue(conv);
+
+      await conversationService.getOrCreate('t-1', 'telegram', '123', 'TG User');
+      expect(mockRedis.setex).toHaveBeenCalledWith(
+        'conv:t-1:telegram:123',
+        1800,
+        expect.any(String)
+      );
     });
   });
 
@@ -100,9 +114,9 @@ describe('conversationService', () => {
       const msg = { id: 'msg-1' } as any;
       mockRepo.addMessage.mockResolvedValue(msg);
 
-      const result = await conversationService.addMessage('conv-1', 'user', 'Hello', 123);
+      const result = await conversationService.addMessage('conv-1', 'user', 'Hello', '123');
       expect(result).toEqual(msg);
-      expect(mockRepo.addMessage).toHaveBeenCalledWith('conv-1', 'user', 'Hello', 123, undefined);
+      expect(mockRepo.addMessage).toHaveBeenCalledWith('conv-1', 'user', 'Hello', '123', undefined);
     });
 
     it('getRecentMessages delegates to repository', async () => {

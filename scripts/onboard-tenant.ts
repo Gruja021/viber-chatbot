@@ -61,6 +61,7 @@ function printError(msg: string) {
 
 async function step0_prerequisites(): Promise<{
   viberToken: string;
+  telegramToken: string;
   firmName: string;
   slug: string;
   systemPrompt: string;
@@ -74,16 +75,21 @@ async function step0_prerequisites(): Promise<{
   const slugInput = await ask(`  Slug [${defaultSlug}]: `);
   const slug = slugInput || defaultSlug;
 
-  const viberToken = await ask('  Viber Bot auth token: ');
-  if (!viberToken) throw new Error('Viber token is required');
+  const viberToken = await ask('  Viber Bot auth token (or press Enter to skip): ');
+  const telegramToken = await ask('  Telegram Bot token (or press Enter to skip): ');
+
+  if (!viberToken && !telegramToken) {
+    throw new Error('At least one platform token is required (Viber or Telegram)');
+  }
 
   const systemPrompt = await ask('  System prompt (or press Enter for default): ');
 
-  return { viberToken, firmName, slug, systemPrompt };
+  return { viberToken, telegramToken, firmName, slug, systemPrompt };
 }
 
 async function step1_createTenant(params: {
   viberToken: string;
+  telegramToken: string;
   firmName: string;
   slug: string;
   systemPrompt: string;
@@ -93,9 +99,14 @@ async function step1_createTenant(params: {
   const body: Record<string, any> = {
     slug: params.slug,
     firm_name: params.firmName,
-    viber_auth_token: params.viberToken,
   };
 
+  if (params.viberToken) {
+    body.viber_auth_token = params.viberToken;
+  }
+  if (params.telegramToken) {
+    body.telegram_bot_token = params.telegramToken;
+  }
   if (params.systemPrompt) {
     body.system_prompt = params.systemPrompt;
   }
@@ -200,14 +211,22 @@ async function step2_setupChatwoot(tenantId: string): Promise<void> {
   printSuccess('Tenant updated with Chatwoot configuration');
 }
 
-async function step3_registerWebhook(tenantId: string): Promise<void> {
-  printStep(3, 'Register Viber Webhook');
+async function step3_registerWebhook(tenantId: string, hasViber: boolean, hasTelegram: boolean): Promise<void> {
+  printStep(3, 'Register Webhooks');
 
-  const result = await apiCall('POST', '/api/viber/register-webhook', {
-    tenant_id: tenantId,
-  });
+  if (hasViber) {
+    const result = await apiCall('POST', '/api/viber/register-webhook', {
+      tenant_id: tenantId,
+    });
+    printSuccess(`Viber webhook registered: ${result.webhook_url}`);
+  }
 
-  printSuccess(`Webhook registered: ${result.webhook_url}`);
+  if (hasTelegram) {
+    const result = await apiCall('POST', '/api/telegram/register-webhook', {
+      tenant_id: tenantId,
+    });
+    printSuccess(`Telegram webhook registered: ${result.webhook_url}`);
+  }
 }
 
 async function step4_healthCheck(tenantId: string): Promise<void> {
@@ -251,7 +270,7 @@ async function step4_healthCheck(tenantId: string): Promise<void> {
 
 async function main() {
   console.log('\n========================================');
-  console.log('  Viber Chatbot — Tenant Onboarding');
+  console.log('  Chatbot — Tenant Onboarding');
   console.log('========================================');
   console.log(`  API: ${API_BASE}`);
 
@@ -278,9 +297,9 @@ async function main() {
       }
     }
 
-    // Step 3: Register Viber webhook
+    // Step 3: Register webhooks
     try {
-      await step3_registerWebhook(tenantId);
+      await step3_registerWebhook(tenantId, !!prereqs.viberToken, !!prereqs.telegramToken);
     } catch (err: any) {
       printError(`Webhook registration failed: ${err.message}`);
       const cont = await ask('  Continue anyway? (y/n) [y]: ');

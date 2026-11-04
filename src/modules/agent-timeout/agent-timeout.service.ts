@@ -1,5 +1,6 @@
 import { redis } from '../../config/redis';
 import { logger } from '../../config/logger';
+import { Platform } from '../../types/platform';
 
 const TIMEOUT_TTL = 180;      // 3 minutes
 const DATA_TTL = 210;          // 3.5 minutes (grace period)
@@ -9,7 +10,8 @@ const DATA_PREFIX = 'agent_timeout:data:';
 export interface AgentTimeoutData {
   conversationId: string;
   tenantId: string;
-  viberUserId: string;
+  platform: Platform;
+  platformUserId: string;
   userMessage: string;
 }
 

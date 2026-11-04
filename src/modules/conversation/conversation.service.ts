@@ -2,20 +2,22 @@ import { redis } from '../../config/redis';
 import { logger } from '../../config/logger';
 import { conversationRepository } from './conversation.repository';
 import { Conversation, Message, MessageRole } from './conversation.model';
+import { Platform } from '../../types/platform';
 
 const CONV_TTL = 1800; // 30 min
 
-function cacheKey(tenantId: string, viberUserId: string): string {
-  return `conv:${tenantId}:${viberUserId}`;
+function cacheKey(tenantId: string, platform: Platform, platformUserId: string): string {
+  return `conv:${tenantId}:${platform}:${platformUserId}`;
 }
 
 export const conversationService = {
   async getOrCreate(
     tenantId: string,
-    viberUserId: string,
-    viberUserName: string | null
+    platform: Platform,
+    platformUserId: string,
+    platformUserName: string | null
   ): Promise<Conversation> {
-    const key = cacheKey(tenantId, viberUserId);
+    const key = cacheKey(tenantId, platform, platformUserId);
 
     const cached = await redis.get(key);
     if (cached) {
@@ -30,29 +32,26 @@ export const conversationService = {
       return conv;
     }
 
-    const conversation = await conversationRepository.create(tenantId, viberUserId, viberUserName);
+    const conversation = await conversationRepository.create(tenantId, platform, platformUserId, platformUserName);
 
     await redis.setex(key, CONV_TTL, JSON.stringify(conversation));
-    logger.debug({ conversationId: conversation.id, tenantId, viberUserId }, 'Conversation loaded');
+    logger.debug({ conversationId: conversation.id, tenantId, platform, platformUserId }, 'Conversation loaded');
 
     return conversation;
   },
 
   async setChatwootConversationId(conversationId: string, chatwootId: number): Promise<void> {
     await conversationRepository.setChatwootConversationId(conversationId, chatwootId);
-    // Invalidate any cache entry containing this conversation
-    // We don't know the cache key here, so we skip cache invalidation;
-    // the cache will refresh on next getOrCreate within TTL
   },
 
   async addMessage(
     conversationId: string,
     role: MessageRole,
     content: string,
-    viberMessageToken?: number | null,
+    platformMessageId?: string | null,
     metadata?: Record<string, unknown>
   ): Promise<Message> {
-    return conversationRepository.addMessage(conversationId, role, content, viberMessageToken, metadata);
+    return conversationRepository.addMessage(conversationId, role, content, platformMessageId, metadata);
   },
 
   async getRecentMessages(conversationId: string, limit?: number): Promise<Message[]> {

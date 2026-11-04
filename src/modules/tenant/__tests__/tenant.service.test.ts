@@ -12,6 +12,7 @@ const makeTenant = (overrides: Partial<Tenant> = {}): Tenant => ({
   slug: 'test-tenant',
   firm_name: 'Test Firm',
   viber_auth_token: 'secret-token',
+  telegram_bot_token: null,
   database_type: null,
   database_credentials: null,
   system_prompt: 'You are helpful.',

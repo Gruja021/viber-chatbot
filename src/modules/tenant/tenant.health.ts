@@ -34,6 +34,10 @@ async function checkDatabase(tenantId: string): Promise<HealthCheckResult> {
 }
 
 async function checkViber(tenant: Tenant): Promise<HealthCheckResult> {
+  if (!tenant.viber_auth_token) {
+    return { check: 'viber', healthy: true, detail: 'N/A — no Viber token configured' };
+  }
+
   try {
     const info = await viberService.getAccountInfo(tenant.viber_auth_token);
     const expectedWebhook = `${env.WEBHOOK_BASE_URL}/api/viber/webhook/${tenant.slug}`;

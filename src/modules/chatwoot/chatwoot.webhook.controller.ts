@@ -3,11 +3,12 @@ import { logger } from '../../config/logger';
 import { conversationService } from '../conversation/conversation.service';
 import { agentTimeoutService } from '../agent-timeout/agent-timeout.service';
 import { viberService } from '../webhook/viber.service';
+import { telegramService } from '../webhook/telegram.service';
 import { tenantService } from '../tenant/tenant.service';
 
 /**
  * Handle incoming Chatwoot webhooks.
- * Listens for agent responses and forwards them to Viber.
+ * Listens for agent responses and forwards them to the correct platform (Viber or Telegram).
  */
 export async function handleChatwootWebhook(req: Request, res: Response) {
   // Always acknowledge immediately
@@ -47,20 +48,28 @@ export async function handleChatwootWebhook(req: Request, res: Response) {
     // Clear pending agent state
     await conversationService.clearPendingAgent(conversation.id);
 
-    // Load tenant to get Viber auth token
+    // Load tenant to get platform tokens
     const tenant = await tenantService.getById(conversation.tenant_id);
     if (!tenant) {
       logger.warn({ tenantId: conversation.tenant_id }, 'Tenant not found for Chatwoot webhook');
       return;
     }
 
-    // Forward agent message to Viber
-    await viberService.sendTextMessage({
-      authToken: tenant.viber_auth_token,
-      receiverId: conversation.viber_user_id,
-      text: content,
-      senderName: tenant.firm_name,
-    });
+    // Forward agent message to the correct platform
+    if (conversation.platform === 'telegram' && tenant.telegram_bot_token) {
+      await telegramService.sendTextMessage(
+        tenant.telegram_bot_token,
+        conversation.platform_user_id,
+        content
+      );
+    } else {
+      await viberService.sendTextMessage({
+        authToken: tenant.viber_auth_token!,
+        receiverId: conversation.platform_user_id,
+        text: content,
+        senderName: tenant.firm_name,
+      });
+    }
 
     // Save agent message in our messages table
     await conversationService.addMessage(conversation.id, 'assistant', content, null, {
@@ -68,8 +77,8 @@ export async function handleChatwootWebhook(req: Request, res: Response) {
     });
 
     logger.info(
-      { conversationId: conversation.id, chatwootConversationId },
-      'Agent response forwarded to Viber'
+      { conversationId: conversation.id, chatwootConversationId, platform: conversation.platform },
+      'Agent response forwarded'
     );
   } catch (err) {
     logger.error({ err }, 'Error processing Chatwoot webhook');

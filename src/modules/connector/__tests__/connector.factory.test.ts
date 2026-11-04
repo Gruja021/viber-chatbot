@@ -15,6 +15,7 @@ function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     slug: 'test',
     firm_name: 'Test',
     viber_auth_token: 'token',
+    telegram_bot_token: null,
     database_type: null,
     database_credentials: null,
     system_prompt: '',

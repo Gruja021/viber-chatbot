@@ -14,7 +14,8 @@ export interface Tenant {
   id: string;
   slug: string;
   firm_name: string;
-  viber_auth_token: string;
+  viber_auth_token: string | null;
+  telegram_bot_token: string | null;
   database_type: DatabaseType | null;
   database_credentials: Buffer | null;
   system_prompt: string;
@@ -32,7 +33,8 @@ export interface Tenant {
 export interface CreateTenantInput {
   slug: string;
   firm_name: string;
-  viber_auth_token: string;
+  viber_auth_token?: string;
+  telegram_bot_token?: string;
   database_type?: DatabaseType;
   database_credentials?: string; // plaintext JSON, will be encrypted
   system_prompt?: string;
@@ -48,6 +50,7 @@ export interface UpdateTenantInput {
   slug?: string;
   firm_name?: string;
   viber_auth_token?: string;
+  telegram_bot_token?: string;
   database_type?: DatabaseType;
   database_credentials?: string;
   system_prompt?: string;

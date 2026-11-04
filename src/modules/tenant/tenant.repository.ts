@@ -32,15 +32,16 @@ export const tenantRepository = {
       : null;
 
     const { rows } = await pool.query<Tenant>(
-      `INSERT INTO tenants (slug, firm_name, viber_auth_token, database_type,
+      `INSERT INTO tenants (slug, firm_name, viber_auth_token, telegram_bot_token, database_type,
         database_credentials, system_prompt, chatwoot_account_id,
         chatwoot_inbox_id, chatwoot_api_token, timezone, working_hours, handover_keywords)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         input.slug,
         input.firm_name,
-        input.viber_auth_token,
+        input.viber_auth_token || null,
+        input.telegram_bot_token || null,
         input.database_type || null,
         encryptedCreds,
         input.system_prompt || 'You are a helpful customer support assistant.',
@@ -71,6 +72,10 @@ export const tenantRepository = {
     if (input.viber_auth_token !== undefined) {
       fields.push(`viber_auth_token = $${idx++}`);
       values.push(input.viber_auth_token);
+    }
+    if (input.telegram_bot_token !== undefined) {
+      fields.push(`telegram_bot_token = $${idx++}`);
+      values.push(input.telegram_bot_token);
     }
     if (input.database_type !== undefined) {
       fields.push(`database_type = $${idx++}`);

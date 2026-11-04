@@ -338,6 +338,24 @@ describe('checkTenantHealth', () => {
     });
   });
 
+  it('reports viber N/A when tenant has no viber_auth_token (Telegram-only)', async () => {
+    mockTenantService.getById.mockResolvedValue({
+      ...mockTenant,
+      viber_auth_token: null,
+      telegram_bot_token: 'tg-token-123',
+    } as any);
+    mockAxios.get.mockResolvedValue({ data: { id: 10 } });
+
+    const report = await checkTenantHealth('t-1');
+
+    expect(report.checks[1]).toMatchObject({
+      check: 'viber',
+      healthy: true,
+      detail: expect.stringContaining('N/A'),
+    });
+    expect(mockViberService.getAccountInfo).not.toHaveBeenCalled();
+  });
+
   it('includes correct tenant_id in report', async () => {
     mockTenantService.getById.mockResolvedValue(mockTenant as any);
     mockViberService.getAccountInfo.mockResolvedValue({

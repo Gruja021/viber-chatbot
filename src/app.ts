@@ -6,6 +6,7 @@ import { webhookRateLimiter, apiRateLimiter } from './middleware/rate-limiter';
 import { tenantRoutes } from './modules/tenant/tenant.routes';
 import { webhookRoutes } from './modules/webhook/webhook.routes';
 import { chatwootWebhookRoutes } from './modules/chatwoot/chatwoot.webhook.routes';
+import { telegramRoutes } from './modules/webhook/telegram.routes';
 import { checkDatabaseConnection } from './config/database';
 import { checkRedisConnection } from './config/redis';
 
@@ -42,6 +43,7 @@ app.get('/health', async (_req, res) => {
 app.use('/api/tenants', apiRateLimiter, tenantRoutes);
 app.use('/api/viber/webhook', webhookRateLimiter);
 app.use('/api/viber', webhookRoutes);
+app.use('/api/telegram', telegramRoutes);
 app.use('/api/chatwoot', chatwootWebhookRoutes);
 
 // Global error handler

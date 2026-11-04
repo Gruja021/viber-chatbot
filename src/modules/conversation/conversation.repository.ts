@@ -1,27 +1,29 @@
 import { pool } from '../../config/database';
 import { Conversation, Message, MessageRole } from './conversation.model';
+import { Platform } from '../../types/platform';
 
 export const conversationRepository = {
-  async findByTenantAndUser(tenantId: string, viberUserId: string): Promise<Conversation | null> {
+  async findByTenantAndUser(tenantId: string, platform: Platform, platformUserId: string): Promise<Conversation | null> {
     const { rows } = await pool.query<Conversation>(
-      'SELECT * FROM conversations WHERE tenant_id = $1 AND viber_user_id = $2',
-      [tenantId, viberUserId]
+      'SELECT * FROM conversations WHERE tenant_id = $1 AND platform = $2 AND platform_user_id = $3',
+      [tenantId, platform, platformUserId]
     );
     return rows[0] || null;
   },
 
   async create(
     tenantId: string,
-    viberUserId: string,
-    viberUserName: string | null
+    platform: Platform,
+    platformUserId: string,
+    platformUserName: string | null
   ): Promise<Conversation> {
     const { rows } = await pool.query<Conversation>(
-      `INSERT INTO conversations (tenant_id, viber_user_id, viber_user_name)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (tenant_id, viber_user_id)
-       DO UPDATE SET viber_user_name = COALESCE($3, conversations.viber_user_name), updated_at = NOW()
+      `INSERT INTO conversations (tenant_id, platform, platform_user_id, platform_user_name)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (tenant_id, platform, platform_user_id)
+       DO UPDATE SET platform_user_name = COALESCE($4, conversations.platform_user_name), updated_at = NOW()
        RETURNING *`,
-      [tenantId, viberUserId, viberUserName]
+      [tenantId, platform, platformUserId, platformUserName]
     );
     return rows[0];
   },
@@ -73,14 +75,14 @@ export const conversationRepository = {
     conversationId: string,
     role: MessageRole,
     content: string,
-    viberMessageToken?: number | null,
+    platformMessageId?: string | null,
     metadata?: Record<string, unknown>
   ): Promise<Message> {
     const { rows } = await pool.query<Message>(
-      `INSERT INTO messages (conversation_id, role, content, viber_message_token, metadata)
+      `INSERT INTO messages (conversation_id, role, content, platform_message_id, metadata)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [conversationId, role, content, viberMessageToken || null, JSON.stringify(metadata || {})]
+      [conversationId, role, content, platformMessageId || null, JSON.stringify(metadata || {})]
     );
     return rows[0];
   },

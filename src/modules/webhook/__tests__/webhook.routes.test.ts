@@ -130,6 +130,23 @@ describe('webhook.routes integration', () => {
       expect(res.body.error).toBe('Tenant not found');
     });
 
+    it('returns 400 when tenant has no viber_auth_token', async () => {
+      mockTenantService.getById.mockResolvedValue({
+        ...mockTenant,
+        viber_auth_token: null,
+        telegram_bot_token: 'tg-token',
+      } as any);
+
+      const res = await request(app)
+        .post('/api/viber/register-webhook')
+        .set('Authorization', 'Bearer test-admin-token')
+        .send({ tenant_id: 't-1' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Tenant has no viber_auth_token configured');
+      expect(mockViberService.setWebhook).not.toHaveBeenCalled();
+    });
+
     it('registers webhook and returns webhook_url', async () => {
       mockTenantService.getById.mockResolvedValue({
         ...mockTenant,
@@ -205,6 +222,24 @@ describe('webhook.routes integration', () => {
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBe('Tenant not found');
+    });
+
+    it('returns 400 when tenant has no viber_auth_token', async () => {
+      mockTenantService.getById.mockResolvedValue({
+        ...mockTenant,
+        viber_auth_token: null,
+        telegram_bot_token: 'tg-token',
+      } as any);
+
+      const res = await request(app)
+        .post('/api/viber/test-message')
+        .set('Authorization', 'Bearer test-admin-token')
+        .send({ tenant_id: 't-1', viber_user_id: 'user-1' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Tenant has no viber_auth_token configured');
+      expect(mockViberService.getAccountInfo).not.toHaveBeenCalled();
+      expect(mockViberService.sendTextMessage).not.toHaveBeenCalled();
     });
 
     it('sends test message and returns result', async () => {
