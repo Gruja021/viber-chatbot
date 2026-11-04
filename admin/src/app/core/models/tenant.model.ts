@@ -18,6 +18,8 @@ export interface Tenant {
   database_type: DatabaseType | null;
   database_credentials: string | null;
   system_prompt: string;
+  openai_api_key: string | null;
+  openai_model: string | null;
   chatwoot_account_id: number | null;
   chatwoot_inbox_id: number | null;
   chatwoot_api_token: string | null;
@@ -62,6 +64,8 @@ export interface CreateTenantInput {
   database_type?: DatabaseType;
   database_credentials?: string;
   system_prompt?: string;
+  openai_api_key?: string;
+  openai_model?: string;
   chatwoot_account_id?: number;
   chatwoot_inbox_id?: number;
   chatwoot_api_token?: string;

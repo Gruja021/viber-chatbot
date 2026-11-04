@@ -15,6 +15,8 @@ export function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     database_type: 'google_sheets',
     database_credentials: '{"spreadsheet_id":"abc"}',
     system_prompt: 'You are a helpful assistant.',
+    openai_api_key: 'sk-test-key',
+    openai_model: 'gpt-4o',
     chatwoot_account_id: 1,
     chatwoot_inbox_id: 10,
     chatwoot_api_token: 'cw-token',

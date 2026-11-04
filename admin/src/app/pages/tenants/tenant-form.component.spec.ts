@@ -106,6 +106,29 @@ describe('TenantFormComponent', () => {
       expect(component.form.get('agent_timeout_seconds')?.hasError('max')).toBeTrue();
     });
 
+    it('should have empty openai_api_key initially', () => {
+      expect(component.form.get('openai_api_key')?.value).toBe('');
+    });
+
+    it('should have empty openai_model initially', () => {
+      expect(component.form.get('openai_model')?.value).toBe('');
+    });
+
+    it('should include openai_api_key and openai_model in create payload', () => {
+      component.form.patchValue({
+        slug: 'ai-co',
+        firm_name: 'AI Co',
+        openai_api_key: 'sk-test-123',
+        openai_model: 'gpt-4o-mini',
+      });
+      component.onSubmit();
+
+      const req = httpTesting.expectOne('/api/tenants');
+      expect(req.request.body.openai_api_key).toBe('sk-test-123');
+      expect(req.request.body.openai_model).toBe('gpt-4o-mini');
+      req.flush(makeTenant({ id: 'new-id', slug: 'ai-co' }));
+    });
+
     it('should have empty handoverKeywords', () => {
       expect(component.handoverKeywords).toEqual([]);
     });
@@ -173,6 +196,36 @@ describe('TenantFormComponent', () => {
         makeTenant({ agent_timeout_seconds: 300 })
       );
       expect(component.form.get('agent_timeout_seconds')?.value).toBe(300);
+    });
+
+    it('should load openai_api_key from tenant', () => {
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(
+        makeTenant({ openai_api_key: 'sk-loaded-key' })
+      );
+      expect(component.form.get('openai_api_key')?.value).toBe('sk-loaded-key');
+    });
+
+    it('should load openai_model from tenant', () => {
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(
+        makeTenant({ openai_model: 'gpt-4o-mini' })
+      );
+      expect(component.form.get('openai_model')?.value).toBe('gpt-4o-mini');
+    });
+
+    it('should include openai_api_key and openai_model in update payload', () => {
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+      component.form.patchValue({ openai_api_key: 'sk-new', openai_model: 'gpt-3.5-turbo' });
+      component.onSubmit();
+
+      const req = httpTesting.expectOne('/api/tenants/tenant-1');
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body.openai_api_key).toBe('sk-new');
+      expect(req.request.body.openai_model).toBe('gpt-3.5-turbo');
+      req.flush(makeTenant());
     });
 
     it('should populate handoverKeywords from tenant', () => {

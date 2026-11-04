@@ -113,6 +113,18 @@ const DAYS: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday
                 <textarea matInput formControlName="system_prompt" rows="6"
                           placeholder="You are a helpful assistant for..."></textarea>
               </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>OpenAI API Key</mat-label>
+                <input matInput formControlName="openai_api_key" type="password"
+                       placeholder="sk-...">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>OpenAI Model</mat-label>
+                <input matInput formControlName="openai_model"
+                       placeholder="gpt-4o, gpt-4o-mini, gpt-3.5-turbo...">
+              </mat-form-field>
             </mat-card-content>
           </mat-card>
 
@@ -286,6 +298,8 @@ export class TenantFormComponent implements OnInit {
     viber_auth_token: [''],
     telegram_bot_token: [''],
     system_prompt: [''],
+    openai_api_key: [''],
+    openai_model: [''],
     database_type: [null],
     database_credentials: [''],
     chatwoot_account_id: [null],
@@ -354,6 +368,8 @@ export class TenantFormComponent implements OnInit {
       slug: raw.slug,
       firm_name: raw.firm_name,
       system_prompt: raw.system_prompt || undefined,
+      openai_api_key: raw.openai_api_key || undefined,
+      openai_model: raw.openai_model || undefined,
       database_type: raw.database_type || undefined,
       database_credentials: raw.database_credentials || undefined,
       viber_auth_token: raw.viber_auth_token || undefined,
@@ -409,6 +425,8 @@ export class TenantFormComponent implements OnInit {
           viber_auth_token: t.viber_auth_token || '',
           telegram_bot_token: t.telegram_bot_token || '',
           system_prompt: t.system_prompt || '',
+          openai_api_key: t.openai_api_key || '',
+          openai_model: t.openai_model || '',
           database_type: t.database_type,
           database_credentials: t.database_credentials || '',
           chatwoot_account_id: t.chatwoot_account_id,
