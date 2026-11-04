@@ -22,6 +22,12 @@ export function viberSignature(req: Request, res: Response, next: NextFunction) 
     return;
   }
 
+  if (!req.tenant.viber_auth_token) {
+    logger.warn({ tenantSlug: req.tenant.slug }, 'Viber auth token not configured');
+    res.status(500).json({ error: 'Internal error' });
+    return;
+  }
+
   const expectedSignature = crypto
     .createHmac('sha256', req.tenant.viber_auth_token)
     .update(req.rawBody)
