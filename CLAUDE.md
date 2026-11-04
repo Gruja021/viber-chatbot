@@ -4,7 +4,7 @@
 
 Multi-tenant AI chatbot sistem za Viber i Telegram platforme. SaaS rešenje koje omogućava malim i srednjim firmama da imaju AI-powered korisničku podršku putem messaging platformi, sa dinamičkim rutiranjem, CRM integracijom i fallback-om na ljudskog agenta.
 
-**Status:** Implementirano kroz 5 faza — multi-tenant osnova, AI integracija, biznis logika, onboarding automatizacija, Telegram podrška. Docker containerization, smoke testovi i GitHub Actions CI/CD.
+**Status:** Implementirano kroz 7 faza — multi-tenant osnova, AI integracija, biznis logika, onboarding automatizacija, Telegram podrška, CI/CD, admin dashboard. Ukupno 476 testova (346 backend + 130 admin).
 
 ## Arhitektura
 
@@ -25,7 +25,9 @@ Multi-tenant AI chatbot sistem za Viber i Telegram platforme. SaaS rešenje koje
 - **Cache:** Redis (conversation cache, agent timeout)
 - **Data sources:** Google Sheets API, WooCommerce REST API, SQL konektori
 - **Containerization:** Docker / Docker Compose
-- **Testing:** Jest (31 suite, 346+ testova)
+- **Admin Dashboard:** Angular 19 (standalone components, signals, Material UI)
+- **Testing Backend:** Jest (31 suite, 346+ testova)
+- **Testing Admin:** Karma + Jasmine (14 spec fajlova, 130 testova)
 - **CI/CD:** GitHub Actions (build + test + Docker build na svaki push/PR)
 
 ## Ključni koncepti
@@ -37,6 +39,18 @@ Multi-tenant AI chatbot sistem za Viber i Telegram platforme. SaaS rešenje koje
 - **Database Abstraction Layer** — modularni konektori (GoogleSheetsConnector, WooCommerceConnector, SQLConnector)
 - **Handover mehanizam** — eskalacija na ljudskog agenta putem Chatwoot-a, sa 3-minutnim agent timeout-om i AI fallback-om
 - **Conversations** — `platform` kolona (`viber` | `telegram`), `platform_user_id`, `platform_user_name` umesto Viber-specifičnih kolona
+
+## Admin Dashboard (`admin/`)
+
+Angular 19 SPA za upravljanje tenantima. Standalone komponente, signal-based state, Material UI.
+
+- **Auth:** Token-based (localStorage), `authGuard` na zaštićenim rutama, `authInterceptor` za Bearer header
+- **Stranice:** Login, Dashboard (system health + tenant overview), Tenant CRUD (list/detail/form), 404
+- **Servisi:** `AuthService` (signals), `TenantService` (HTTP CRUD), `authInterceptor` (funkcionalni)
+- **Testiranje:** Karma + Jasmine, 14 spec fajlova, 130 testova
+  - `npm test` — interaktivno (Chrome)
+  - `npm run test:ci` — CI mode (ChromeHeadless, single run)
+- **Test pattern:** `provideRouter([])` za RouterLink, `fixture.debugElement.injector.get(MatSnackBar)` za component-level providers
 
 ## Konvencije koda
 
@@ -58,6 +72,7 @@ Multi-tenant AI chatbot sistem za Viber i Telegram platforme. SaaS rešenje koje
 | 4    | Onboarding automatizacija — setup klijenta za < 30 min, health checks, Docker  | ✅     |
 | 5    | Telegram podrška — platform-agnostična arhitektura, Telegram Bot API            | ✅     |
 | 6    | CI/CD — GitHub Actions pipeline (build, test, Docker verify)                    | ✅     |
+| 7    | Admin Dashboard — Angular 19 SPA sa CRUD, health checks, unit testovi (130)     | ✅     |
 
 ## Važne napomene
 
