@@ -157,6 +157,16 @@ const DAYS: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday
                 <mat-label>API Token</mat-label>
                 <input matInput formControlName="chatwoot_api_token" type="password">
               </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Agent Timeout (seconds)</mat-label>
+                <input matInput formControlName="agent_timeout_seconds" type="number">
+                @if (form.get('agent_timeout_seconds')?.hasError('min')) {
+                  <mat-error>Minimum 30 seconds</mat-error>
+                }
+                @if (form.get('agent_timeout_seconds')?.hasError('max')) {
+                  <mat-error>Maximum 3600 seconds</mat-error>
+                }
+              </mat-form-field>
             </mat-card-content>
           </mat-card>
 
@@ -281,6 +291,7 @@ export class TenantFormComponent implements OnInit {
     chatwoot_account_id: [null],
     chatwoot_inbox_id: [null],
     chatwoot_api_token: [''],
+    agent_timeout_seconds: [180, [Validators.min(30), Validators.max(3600)]],
     timezone: ['Europe/Belgrade'],
     working_hours: this.fb.group(
       DAYS.reduce((acc, day) => {
@@ -350,6 +361,7 @@ export class TenantFormComponent implements OnInit {
       chatwoot_account_id: raw.chatwoot_account_id || undefined,
       chatwoot_inbox_id: raw.chatwoot_inbox_id || undefined,
       chatwoot_api_token: raw.chatwoot_api_token || undefined,
+      agent_timeout_seconds: raw.agent_timeout_seconds || undefined,
       timezone: raw.timezone || undefined,
       working_hours: Object.keys(workingHours).length ? workingHours : undefined,
       handover_keywords: this.handoverKeywords.length ? this.handoverKeywords : undefined,
@@ -402,6 +414,7 @@ export class TenantFormComponent implements OnInit {
           chatwoot_account_id: t.chatwoot_account_id,
           chatwoot_inbox_id: t.chatwoot_inbox_id,
           chatwoot_api_token: t.chatwoot_api_token || '',
+          agent_timeout_seconds: t.agent_timeout_seconds || 180,
           timezone: t.timezone || 'Europe/Belgrade',
         });
 

@@ -17,20 +17,23 @@ export interface AgentTimeoutData {
 
 export const agentTimeoutService = {
   /**
-   * Start a 3-minute timeout for agent response.
+   * Start a timeout for agent response.
    * If the agent doesn't respond, the Redis key expires and triggers AI fallback.
+   * @param timeoutSeconds - custom timeout in seconds (default: 180)
    */
-  async startTimeout(data: AgentTimeoutData): Promise<void> {
+  async startTimeout(data: AgentTimeoutData, timeoutSeconds?: number): Promise<void> {
+    const ttl = timeoutSeconds || TIMEOUT_TTL;
+    const dataTtl = ttl + 30; // grace period
     const timeoutKey = `${KEY_PREFIX}${data.conversationId}`;
     const dataKey = `${DATA_PREFIX}${data.conversationId}`;
 
-    // Set the expiring trigger key (3 min)
-    await redis.setex(timeoutKey, TIMEOUT_TTL, '1');
+    // Set the expiring trigger key
+    await redis.setex(timeoutKey, ttl, '1');
 
     // Set the data key with slightly longer TTL (grace period for reading after expiry)
-    await redis.setex(dataKey, DATA_TTL, JSON.stringify(data));
+    await redis.setex(dataKey, dataTtl, JSON.stringify(data));
 
-    logger.debug({ conversationId: data.conversationId }, 'Agent timeout started (180s)');
+    logger.debug({ conversationId: data.conversationId, ttl }, 'Agent timeout started');
   },
 
   /**

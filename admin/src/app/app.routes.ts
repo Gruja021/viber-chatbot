@@ -11,6 +11,7 @@ export const routes: Routes = [
       { path: 'tenants', loadComponent: () => import('./pages/tenants/tenant-list.component').then(m => m.TenantListComponent) },
       { path: 'tenants/new', loadComponent: () => import('./pages/tenants/tenant-form.component').then(m => m.TenantFormComponent) },
       { path: 'tenants/:id/edit', loadComponent: () => import('./pages/tenants/tenant-form.component').then(m => m.TenantFormComponent) },
+      { path: 'tenants/:id/agents', loadComponent: () => import('./pages/tenants/tenant-agents.component').then(m => m.TenantAgentsComponent) },
       { path: 'tenants/:id', loadComponent: () => import('./pages/tenants/tenant-detail.component').then(m => m.TenantDetailComponent) },
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
     ],

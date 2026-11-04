@@ -107,7 +107,7 @@ export async function handleIncomingMessage(
         platform: sender.platform,
         platformUserId: sender.userId,
         userMessage: text,
-      });
+      }, tenant.agent_timeout_seconds);
 
       return;
     }

@@ -74,6 +74,92 @@ export const chatwootProvisioningService = {
     }
   },
 
+  async createAgent(
+    chatwootApiToken: string,
+    chatwootAccountId: number,
+    name: string,
+    email: string
+  ): Promise<ChatwootAgent> {
+    try {
+      const response = await axios.post(
+        `${CHATWOOT_BASE_URL}/api/v1/accounts/${chatwootAccountId}/agents`,
+        { name, email, role: 'agent' },
+        {
+          headers: {
+            'api_access_token': chatwootApiToken,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const agent: ChatwootAgent = {
+        id: response.data.id,
+        name: response.data.name,
+        email: response.data.email,
+        role: response.data.role,
+      };
+
+      logger.info({ agentId: agent.id, name: agent.name }, 'Chatwoot agent created');
+      return agent;
+    } catch (err) {
+      logger.error({ err }, 'Failed to create Chatwoot agent');
+      throw err;
+    }
+  },
+
+  async listInboxAgents(
+    chatwootApiToken: string,
+    chatwootAccountId: number,
+    inboxId: number
+  ): Promise<ChatwootAgent[]> {
+    try {
+      const response = await axios.get(
+        `${CHATWOOT_BASE_URL}/api/v1/accounts/${chatwootAccountId}/inbox_members/${inboxId}`,
+        {
+          headers: {
+            'api_access_token': chatwootApiToken,
+          },
+        }
+      );
+
+      return response.data.payload || response.data;
+    } catch (err) {
+      logger.error({ err }, 'Failed to list inbox agents');
+      throw err;
+    }
+  },
+
+  async removeAgentFromInbox(
+    chatwootApiToken: string,
+    chatwootAccountId: number,
+    inboxId: number,
+    agentIds: number[]
+  ): Promise<void> {
+    try {
+      await axios.delete(
+        `${CHATWOOT_BASE_URL}/api/v1/accounts/${chatwootAccountId}/inbox_members`,
+        {
+          data: {
+            inbox_id: inboxId,
+            user_ids: agentIds,
+          },
+          headers: {
+            'api_access_token': chatwootApiToken,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      logger.info(
+        { inboxId, agentIds },
+        'Agent(s) removed from Chatwoot inbox'
+      );
+    } catch (err) {
+      logger.error({ err }, 'Failed to remove agent from Chatwoot inbox');
+      throw err;
+    }
+  },
+
   async listAgents(chatwootApiToken: string, chatwootAccountId: number): Promise<ChatwootAgent[]> {
     try {
       const response = await axios.get(

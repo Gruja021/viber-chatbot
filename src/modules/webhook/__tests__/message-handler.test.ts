@@ -34,6 +34,7 @@ const makeTenant = (overrides: any = {}) => ({
   timezone: 'Europe/Belgrade',
   working_hours: {},
   handover_keywords: ['agent', 'operater', 'covek'],
+  agent_timeout_seconds: 180,
   ...overrides,
 });
 
@@ -155,8 +156,31 @@ describe('message-handler', () => {
         platform: 'viber',
         platformUserId: 'user-1',
         userMessage: 'Imam pitanje',
-      });
+      }, 180);
       expect(mockAiService.generateResponse).not.toHaveBeenCalled();
+    });
+
+    it('passes custom agent_timeout_seconds to startTimeout', async () => {
+      const conv = { id: 'conv-1', is_handover: false, chatwoot_conversation_id: 42 };
+      mockConversationService.getOrCreate.mockResolvedValue(conv as any);
+      mockConversationService.addMessage.mockResolvedValue({} as any);
+      mockConversationService.setPendingAgent.mockResolvedValue(undefined);
+      mockChatwootService.sendMessage.mockResolvedValue(undefined);
+      mockAgentTimeout.startTimeout.mockResolvedValue(undefined);
+      mockBusinessHours.isWithinWorkingHours.mockReturnValue(true);
+
+      await handleIncomingMessage(
+        makeTenant({ agent_timeout_seconds: 300 }),
+        makeSender(),
+        'Imam pitanje',
+        '100',
+        mockMessenger
+      );
+
+      expect(mockAgentTimeout.startTimeout).toHaveBeenCalledWith(
+        expect.objectContaining({ conversationId: 'conv-1' }),
+        300
+      );
     });
 
     it('falls back to AI when no Chatwoot during working hours', async () => {

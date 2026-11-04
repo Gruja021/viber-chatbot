@@ -254,6 +254,15 @@ describe('tenantRepository', () => {
       );
     });
 
+    it('updates agent_timeout_seconds field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { agent_timeout_seconds: 300 });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('agent_timeout_seconds = $1'),
+        [300, 'uuid-1']
+      );
+    });
+
     it('updates status field', async () => {
       mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
       await tenantRepository.update('uuid-1', { status: 'suspended' });
@@ -282,15 +291,17 @@ describe('tenantRepository', () => {
         timezone: 'UTC',
         working_hours: { monday: { start: '09:00', end: '17:00' } },
         handover_keywords: ['help'],
+        agent_timeout_seconds: 300,
         status: 'inactive',
       });
 
       const [query, values] = mockQuery.mock.calls[0];
-      // All 14 fields + id = 15 values
-      expect(values).toHaveLength(15);
+      // All 15 fields + id = 16 values
+      expect(values).toHaveLength(16);
       expect(query).toContain('slug = $1');
-      expect(query).toContain('status = $14');
-      expect(query).toContain('WHERE id = $15');
+      expect(query).toContain('agent_timeout_seconds = $14');
+      expect(query).toContain('status = $15');
+      expect(query).toContain('WHERE id = $16');
       expect(query).toContain('updated_at = NOW()');
     });
 

@@ -194,4 +194,41 @@ describe('TenantDetailComponent', () => {
     fixture.detectChanges();
     component.deactivate();
   });
+
+  it('should display agent_timeout_seconds in CRM card', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant({ agent_timeout_seconds: 300 }));
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('300s');
+  });
+
+  it('should show Manage Agents button when Chatwoot is configured', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant({ chatwoot_account_id: 1 }));
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Manage Agents');
+  });
+
+  it('should not show Manage Agents button when no Chatwoot config', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant({ chatwoot_account_id: null }));
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).not.toContain('Manage Agents');
+  });
+
+  it('should display agent_timeout_seconds from tenant', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+    expect(component.tenant()!.agent_timeout_seconds).toBe(180);
+  });
 });

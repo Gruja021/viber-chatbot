@@ -45,6 +45,13 @@ describe('App Routes', () => {
     expect(detail).toBeTruthy();
   });
 
+  it('should have tenants/:id/agents route', () => {
+    const parent = routes.find(r => r.path === '' && r.children);
+    const agents = parent!.children!.find(r => r.path === 'tenants/:id/agents');
+    expect(agents).toBeTruthy();
+    expect(agents!.loadComponent).toBeDefined();
+  });
+
   it('should redirect empty path to dashboard', () => {
     const parent = routes.find(r => r.path === '' && r.children);
     const redirect = parent!.children!.find(r => r.path === '' && r.redirectTo === 'dashboard');

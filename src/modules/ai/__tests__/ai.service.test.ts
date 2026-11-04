@@ -40,6 +40,7 @@ function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     timezone: 'Europe/Belgrade',
     working_hours: {},
     handover_keywords: [],
+    agent_timeout_seconds: 180,
     status: 'active',
     created_at: new Date(),
     updated_at: new Date(),

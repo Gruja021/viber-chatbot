@@ -1,5 +1,6 @@
 import {
   Tenant,
+  ChatwootAgent,
   SystemHealth,
   TenantHealthResponse,
 } from '../core/models/tenant.model';
@@ -23,9 +24,22 @@ export function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
       tuesday: { start: '09:00', end: '17:00' },
     },
     handover_keywords: ['agent', 'human'],
+    agent_timeout_seconds: 180,
     status: 'active',
     created_at: '2024-01-15T10:00:00Z',
     updated_at: '2024-06-01T12:00:00Z',
+    ...overrides,
+  };
+}
+
+export function makeChatwootAgent(
+  overrides: Partial<ChatwootAgent> = {}
+): ChatwootAgent {
+  return {
+    id: 1,
+    name: 'Test Agent',
+    email: 'agent@test.com',
+    role: 'agent',
     ...overrides,
   };
 }

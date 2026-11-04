@@ -146,8 +146,17 @@ import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
                   <span matListItemTitle>Inbox ID</span>
                   <span matListItemLine>{{ tenant()!.chatwoot_inbox_id }}</span>
                 </mat-list-item>
+                <mat-list-item>
+                  <span matListItemTitle>Agent Timeout</span>
+                  <span matListItemLine>{{ tenant()!.agent_timeout_seconds }}s</span>
+                </mat-list-item>
               </mat-list>
             </mat-card-content>
+            <mat-card-actions>
+              <button mat-button [routerLink]="['/tenants', tenant()!.id, 'agents']">
+                <mat-icon>people</mat-icon> Manage Agents
+              </button>
+            </mat-card-actions>
           </mat-card>
         }
 

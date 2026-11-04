@@ -22,6 +22,7 @@ const makeTenant = (overrides: Partial<Tenant> = {}): Tenant => ({
   timezone: 'Europe/Belgrade',
   working_hours: {},
   handover_keywords: [],
+  agent_timeout_seconds: 180,
   status: 'active',
   created_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
   updated_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
@@ -109,8 +110,34 @@ describe('tenantService', () => {
       expect(result).not.toHaveProperty('chatwoot_api_token');
       expect(result).toHaveProperty('id', 'uuid-1');
       expect(result).toHaveProperty('slug', 'test-tenant');
+      expect(result).toHaveProperty('agent_timeout_seconds', 180);
       // Should NOT cache on create
       expect(mockRedis.setex).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('toPublic', () => {
+    it('includes agent_timeout_seconds in public tenant', async () => {
+      const tenant = makeTenant({ agent_timeout_seconds: 300 });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X' });
+      expect(result).toHaveProperty('agent_timeout_seconds', 300);
+    });
+
+    it('strips sensitive fields from public tenant', async () => {
+      const tenant = makeTenant();
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X' });
+      expect(result).not.toHaveProperty('viber_auth_token');
+      expect(result).not.toHaveProperty('telegram_bot_token');
+      expect(result).not.toHaveProperty('database_credentials');
+      expect(result).not.toHaveProperty('chatwoot_api_token');
+      expect(result).toHaveProperty('timezone');
+      expect(result).toHaveProperty('working_hours');
+      expect(result).toHaveProperty('handover_keywords');
+      expect(result).toHaveProperty('agent_timeout_seconds');
     });
   });
 

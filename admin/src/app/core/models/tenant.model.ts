@@ -24,6 +24,7 @@ export interface Tenant {
   timezone: string;
   working_hours: WorkingHours;
   handover_keywords: string[];
+  agent_timeout_seconds: number;
   status: TenantStatus;
   created_at: string;
   updated_at: string;
@@ -40,9 +41,17 @@ export interface TenantPublic {
   timezone: string;
   working_hours: WorkingHours;
   handover_keywords: string[];
+  agent_timeout_seconds: number;
   status: TenantStatus;
   created_at: string;
   updated_at: string;
+}
+
+export interface ChatwootAgent {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
 }
 
 export interface CreateTenantInput {
@@ -59,6 +68,7 @@ export interface CreateTenantInput {
   timezone?: string;
   working_hours?: WorkingHours;
   handover_keywords?: string[];
+  agent_timeout_seconds?: number;
 }
 
 export interface UpdateTenantInput extends Partial<CreateTenantInput> {

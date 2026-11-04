@@ -34,8 +34,8 @@ export const tenantRepository = {
     const { rows } = await pool.query<Tenant>(
       `INSERT INTO tenants (slug, firm_name, viber_auth_token, telegram_bot_token, database_type,
         database_credentials, system_prompt, chatwoot_account_id,
-        chatwoot_inbox_id, chatwoot_api_token, timezone, working_hours, handover_keywords)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        chatwoot_inbox_id, chatwoot_api_token, timezone, working_hours, handover_keywords, agent_timeout_seconds)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
       [
         input.slug,
@@ -51,6 +51,7 @@ export const tenantRepository = {
         input.timezone || 'Europe/Belgrade',
         JSON.stringify(input.working_hours || {}),
         input.handover_keywords || ['zelim da pricam sa covekom', 'hocu operatera', 'agent', 'covek', 'operater'],
+        input.agent_timeout_seconds || 180,
       ]
     );
     return rows[0];
@@ -112,6 +113,10 @@ export const tenantRepository = {
     if (input.handover_keywords !== undefined) {
       fields.push(`handover_keywords = $${idx++}`);
       values.push(input.handover_keywords);
+    }
+    if (input.agent_timeout_seconds !== undefined) {
+      fields.push(`agent_timeout_seconds = $${idx++}`);
+      values.push(input.agent_timeout_seconds);
     }
     if (input.status !== undefined) {
       fields.push(`status = $${idx++}`);

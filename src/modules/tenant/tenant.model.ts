@@ -25,6 +25,7 @@ export interface Tenant {
   timezone: string;
   working_hours: WorkingHours;
   handover_keywords: string[];
+  agent_timeout_seconds: number;
   status: TenantStatus;
   created_at: Date;
   updated_at: Date;
@@ -44,6 +45,7 @@ export interface CreateTenantInput {
   timezone?: string;
   working_hours?: WorkingHours;
   handover_keywords?: string[];
+  agent_timeout_seconds?: number;
 }
 
 export interface UpdateTenantInput {
@@ -60,6 +62,7 @@ export interface UpdateTenantInput {
   timezone?: string;
   working_hours?: WorkingHours;
   handover_keywords?: string[];
+  agent_timeout_seconds?: number;
   status?: TenantStatus;
 }
 
@@ -74,6 +77,7 @@ export interface TenantPublic {
   timezone: string;
   working_hours: WorkingHours;
   handover_keywords: string[];
+  agent_timeout_seconds: number;
   status: TenantStatus;
   created_at: Date;
   updated_at: Date;

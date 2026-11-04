@@ -41,6 +41,31 @@ describe('agent-timeout.service', () => {
       await agentTimeoutService.startTimeout(testData);
       expect(mockRedis.setex).toHaveBeenCalledTimes(2);
     });
+
+    it('uses custom timeout when provided', async () => {
+      await agentTimeoutService.startTimeout(testData, 300);
+
+      expect(mockRedis.setex).toHaveBeenCalledWith(
+        'agent_timeout:conv-1',
+        300,
+        '1'
+      );
+      expect(mockRedis.setex).toHaveBeenCalledWith(
+        'agent_timeout:data:conv-1',
+        330, // 300 + 30 grace period
+        JSON.stringify(testData)
+      );
+    });
+
+    it('uses default 180s when no custom timeout provided', async () => {
+      await agentTimeoutService.startTimeout(testData);
+
+      expect(mockRedis.setex).toHaveBeenCalledWith(
+        'agent_timeout:conv-1',
+        180,
+        '1'
+      );
+    });
   });
 
   describe('cancelTimeout', () => {

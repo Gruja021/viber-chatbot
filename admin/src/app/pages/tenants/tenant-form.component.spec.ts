@@ -92,6 +92,20 @@ describe('TenantFormComponent', () => {
       expect(component.form.get('timezone')?.value).toBe('Europe/Belgrade');
     });
 
+    it('should have default agent_timeout_seconds 180', () => {
+      expect(component.form.get('agent_timeout_seconds')?.value).toBe(180);
+    });
+
+    it('should validate agent_timeout_seconds min 30', () => {
+      component.form.get('agent_timeout_seconds')?.setValue(10);
+      expect(component.form.get('agent_timeout_seconds')?.hasError('min')).toBeTrue();
+    });
+
+    it('should validate agent_timeout_seconds max 3600', () => {
+      component.form.get('agent_timeout_seconds')?.setValue(5000);
+      expect(component.form.get('agent_timeout_seconds')?.hasError('max')).toBeTrue();
+    });
+
     it('should have empty handoverKeywords', () => {
       expect(component.handoverKeywords).toEqual([]);
     });
@@ -153,6 +167,14 @@ describe('TenantFormComponent', () => {
       expect(component.form.get('firm_name')?.value).toBe('Loaded Co');
     });
 
+    it('should load agent_timeout_seconds from tenant', () => {
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(
+        makeTenant({ agent_timeout_seconds: 300 })
+      );
+      expect(component.form.get('agent_timeout_seconds')?.value).toBe(300);
+    });
+
     it('should populate handoverKeywords from tenant', () => {
       fixture.detectChanges();
       httpTesting.expectOne('/api/tenants/tenant-1').flush(
@@ -174,6 +196,19 @@ describe('TenantFormComponent', () => {
 
       expect(snackBar.open).toHaveBeenCalledWith('Failed to load tenant', 'OK', jasmine.any(Object));
       expect(router.navigate).toHaveBeenCalledWith(['/tenants']);
+    });
+
+    it('should include agent_timeout_seconds in update payload', () => {
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+      component.form.patchValue({ agent_timeout_seconds: 300 });
+      component.onSubmit();
+
+      const req = httpTesting.expectOne('/api/tenants/tenant-1');
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body.agent_timeout_seconds).toBe(300);
+      req.flush(makeTenant({ agent_timeout_seconds: 300 }));
     });
 
     it('should submit update tenant', () => {
