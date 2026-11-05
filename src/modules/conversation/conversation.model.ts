@@ -1,5 +1,7 @@
 import { Platform } from '../../types/platform';
 
+export type ConversationStatus = 'ai_active' | 'pending_human' | 'human_active' | 'closed';
+
 export interface Conversation {
   id: string;
   tenant_id: string;
@@ -11,6 +13,7 @@ export interface Conversation {
   handover_until: Date | null;
   pending_agent_response: boolean;
   agent_routed_at: Date | null;
+  conversation_status: ConversationStatus;
   created_at: Date;
   updated_at: Date;
 }

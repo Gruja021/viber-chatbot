@@ -41,6 +41,7 @@ function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     working_hours: {},
     handover_keywords: [],
     agent_timeout_seconds: 180,
+    session_timeout_hours: 24,
     status: 'active',
     created_at: new Date(),
     updated_at: new Date(),
@@ -67,22 +68,32 @@ describe('aiService', () => {
   });
 
   describe('generateResponse without connector', () => {
-    it('returns AI response for simple message', async () => {
+    it('returns AIResponse with text for simple message', async () => {
       mockCreate.mockResolvedValue({
         choices: [{ message: { content: 'Zdravo! Kako mogu pomoći?' }, finish_reason: 'stop' }],
       });
 
       const result = await aiService.generateResponse(makeTenant(), [], 'Zdravo');
 
-      expect(result).toBe('Zdravo! Kako mogu pomoći?');
+      expect(result.text).toBe('Zdravo! Kako mogu pomoći?');
+      expect(result.shouldEscalate).toBe(false);
       expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           model: 'gpt-4o-mini',
           temperature: 0.3,
           max_tokens: 1024,
-          tools: undefined,
         })
       );
+    });
+
+    it('does not send tools when no connector and no chatwoot', async () => {
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
+      });
+
+      await aiService.generateResponse(makeTenant(), [], 'test');
+
+      expect(mockCreate.mock.calls[0][0].tools).toBeUndefined();
     });
 
     it('includes NO_DATABASE_SUFFIX in system prompt when no connector', async () => {
@@ -169,7 +180,8 @@ describe('aiService', () => {
 
       const result = await aiService.generateResponse(makeTenant(), [], 'Koliko košta widget?');
 
-      expect(result).toBe('Widget A košta 10.00.');
+      expect(result.text).toBe('Widget A košta 10.00.');
+      expect(result.shouldEscalate).toBe(false);
       expect(mockQuery).toHaveBeenCalledWith('widget');
       expect(mockCreate).toHaveBeenCalledTimes(2);
     });
@@ -222,6 +234,129 @@ describe('aiService', () => {
     });
   });
 
+  describe('escalate_to_human tool', () => {
+    it('includes escalate_to_human tool when tenant has chatwoot', async () => {
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
+      });
+
+      await aiService.generateResponse(
+        makeTenant({ chatwoot_api_token: 'cw-token' }),
+        [],
+        'test'
+      );
+
+      const tools = mockCreate.mock.calls[0][0].tools;
+      expect(tools).toBeDefined();
+      const escalateTool = tools.find((t: any) => t.function.name === 'escalate_to_human');
+      expect(escalateTool).toBeDefined();
+    });
+
+    it('does not include escalate_to_human when no chatwoot', async () => {
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
+      });
+
+      await aiService.generateResponse(
+        makeTenant({ chatwoot_api_token: null }),
+        [],
+        'test'
+      );
+
+      expect(mockCreate.mock.calls[0][0].tools).toBeUndefined();
+    });
+
+    it('returns shouldEscalate=true when AI calls escalate_to_human', async () => {
+      mockCreate.mockResolvedValue({
+        choices: [{
+          message: {
+            content: null,
+            tool_calls: [{
+              id: 'call-esc',
+              type: 'function',
+              function: {
+                name: 'escalate_to_human',
+                arguments: '{"reason":"Complex billing issue"}',
+              },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+      });
+
+      const result = await aiService.generateResponse(
+        makeTenant({ chatwoot_api_token: 'cw-token' }),
+        [],
+        'I need refund'
+      );
+
+      expect(result.shouldEscalate).toBe(true);
+      expect(result.escalationReason).toBe('Complex billing issue');
+      expect(result.text).toBeTruthy();
+    });
+  });
+
+  describe('both tools together', () => {
+    it('includes both search_database and escalate_to_human when connector + chatwoot', async () => {
+      mockCreateConnector.mockReturnValue({
+        query: mockQuery,
+        testConnection: jest.fn(),
+      });
+
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
+      });
+
+      await aiService.generateResponse(
+        makeTenant({ chatwoot_api_token: 'cw-token' }),
+        [],
+        'test'
+      );
+
+      const tools = mockCreate.mock.calls[0][0].tools;
+      expect(tools).toBeDefined();
+      expect(tools).toHaveLength(2);
+      expect(tools[0].function.name).toBe('search_database');
+      expect(tools[1].function.name).toBe('escalate_to_human');
+    });
+
+    it('escalate_to_human returns immediately even when connector is present', async () => {
+      mockCreateConnector.mockReturnValue({
+        query: mockQuery,
+        testConnection: jest.fn(),
+      });
+
+      mockCreate.mockResolvedValue({
+        choices: [{
+          message: {
+            content: null,
+            tool_calls: [{
+              id: 'call-esc',
+              type: 'function',
+              function: {
+                name: 'escalate_to_human',
+                arguments: '{"reason":"Need human help"}',
+              },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+      });
+
+      const result = await aiService.generateResponse(
+        makeTenant({ chatwoot_api_token: 'cw-token' }),
+        [],
+        'complex issue'
+      );
+
+      expect(result.shouldEscalate).toBe(true);
+      expect(result.escalationReason).toBe('Need human help');
+      // Should NOT continue function call loop or call search
+      expect(mockQuery).not.toHaveBeenCalled();
+      expect(mockCreate).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('error handling', () => {
     it('returns user-friendly message on rate limit (429)', async () => {
       const error: any = new Error('Rate limited');
@@ -230,7 +365,8 @@ describe('aiService', () => {
 
       const result = await aiService.generateResponse(makeTenant(), [], 'test');
 
-      expect(result).toContain('pokušajte ponovo');
+      expect(result.text).toContain('pokušajte ponovo');
+      expect(result.shouldEscalate).toBe(false);
     });
 
     it('returns generic error message on other errors', async () => {
@@ -238,7 +374,8 @@ describe('aiService', () => {
 
       const result = await aiService.generateResponse(makeTenant(), [], 'test');
 
-      expect(result).toContain('greške');
+      expect(result.text).toContain('greške');
+      expect(result.shouldEscalate).toBe(false);
     });
 
     it('returns fallback when AI returns empty content', async () => {
@@ -248,7 +385,8 @@ describe('aiService', () => {
 
       const result = await aiService.generateResponse(makeTenant(), [], 'test');
 
-      expect(result).toContain('nisam uspeo');
+      expect(result.text).toContain('nisam uspeo');
+      expect(result.shouldEscalate).toBe(false);
     });
   });
 });

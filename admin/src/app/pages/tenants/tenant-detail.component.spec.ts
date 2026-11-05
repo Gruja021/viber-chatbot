@@ -231,4 +231,39 @@ describe('TenantDetailComponent', () => {
     httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
     expect(component.tenant()!.agent_timeout_seconds).toBe(180);
   });
+
+  it('should display session_timeout_hours in DOM', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant({ session_timeout_hours: 48 }));
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('48h');
+    expect(compiled.textContent).toContain('Session Timeout');
+  });
+
+  it('should display AI-First label when agent_timeout_seconds is 0', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ agent_timeout_seconds: 0, chatwoot_account_id: 1 })
+    );
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('AI-First');
+  });
+
+  it('should display Human-First label when agent_timeout_seconds > 0', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ agent_timeout_seconds: 120, chatwoot_account_id: 1 })
+    );
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Human-First');
+  });
 });

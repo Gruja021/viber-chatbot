@@ -9,6 +9,7 @@ import { tenantService } from '../tenant/tenant.service';
 /**
  * Handle incoming Chatwoot webhooks.
  * Listens for agent responses and forwards them to the correct platform (Viber or Telegram).
+ * Also handles conversation_resolved events to close conversations.
  */
 export async function handleChatwootWebhook(req: Request, res: Response) {
   // Always acknowledge immediately
@@ -16,6 +17,12 @@ export async function handleChatwootWebhook(req: Request, res: Response) {
 
   try {
     const payload = req.body;
+
+    // Handle conversation_resolved event
+    if (payload.event === 'conversation_status_changed' && payload.status === 'resolved') {
+      await handleConversationResolved(payload);
+      return;
+    }
 
     // Only handle message_created events
     if (payload.event !== 'message_created') return;
@@ -45,8 +52,9 @@ export async function handleChatwootWebhook(req: Request, res: Response) {
     // Cancel the timeout (agent responded in time)
     await agentTimeoutService.cancelTimeout(conversation.id);
 
-    // Clear pending agent state
+    // Clear pending agent state and set human_active
     await conversationService.clearPendingAgent(conversation.id);
+    await conversationService.setStatus(conversation.id, 'human_active');
 
     // Load tenant to get platform tokens
     const tenant = await tenantService.getById(conversation.tenant_id);
@@ -54,6 +62,9 @@ export async function handleChatwootWebhook(req: Request, res: Response) {
       logger.warn({ tenantId: conversation.tenant_id }, 'Tenant not found for Chatwoot webhook');
       return;
     }
+
+    // Invalidate cache so next message picks up human_active status
+    await conversationService.invalidateCache(conversation.tenant_id, conversation.platform, conversation.platform_user_id);
 
     // Forward agent message to the correct platform
     if (conversation.platform === 'telegram' && tenant.telegram_bot_token) {
@@ -83,4 +94,26 @@ export async function handleChatwootWebhook(req: Request, res: Response) {
   } catch (err) {
     logger.error({ err }, 'Error processing Chatwoot webhook');
   }
+}
+
+async function handleConversationResolved(payload: any): Promise<void> {
+  const chatwootConversationId = payload.id || payload.conversation?.id;
+  if (!chatwootConversationId) return;
+
+  logger.info({ chatwootConversationId }, 'Conversation resolved in Chatwoot');
+
+  const conversation = await conversationService.findByChatwootConversationId(chatwootConversationId);
+  if (!conversation) {
+    logger.warn({ chatwootConversationId }, 'No conversation found for resolved Chatwoot ID');
+    return;
+  }
+
+  await conversationService.setStatus(conversation.id, 'closed');
+  await conversationService.invalidateCache(
+    conversation.tenant_id,
+    conversation.platform,
+    conversation.platform_user_id
+  );
+
+  logger.info({ conversationId: conversation.id, chatwootConversationId }, 'Conversation closed via Chatwoot resolve');
 }

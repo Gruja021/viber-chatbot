@@ -169,15 +169,35 @@ const DAYS: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday
                 <mat-label>API Token</mat-label>
                 <input matInput formControlName="chatwoot_api_token" type="password">
               </mat-form-field>
+            </mat-card-content>
+          </mat-card>
+
+          <!-- Conversation Mode -->
+          <mat-card>
+            <mat-card-header><mat-card-title>Conversation Mode</mat-card-title></mat-card-header>
+            <mat-card-content>
               <mat-form-field appearance="outline">
                 <mat-label>Agent Timeout (seconds)</mat-label>
                 <input matInput formControlName="agent_timeout_seconds" type="number">
                 @if (form.get('agent_timeout_seconds')?.hasError('min')) {
-                  <mat-error>Minimum 30 seconds</mat-error>
+                  <mat-error>Minimum 0 seconds</mat-error>
                 }
                 @if (form.get('agent_timeout_seconds')?.hasError('max')) {
                   <mat-error>Maximum 3600 seconds</mat-error>
                 }
+                <mat-hint>{{ getConversationModeHint() }}</mat-hint>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Session Timeout (hours)</mat-label>
+                <input matInput formControlName="session_timeout_hours" type="number">
+                @if (form.get('session_timeout_hours')?.hasError('min')) {
+                  <mat-error>Minimum 1 hour</mat-error>
+                }
+                @if (form.get('session_timeout_hours')?.hasError('max')) {
+                  <mat-error>Maximum 168 hours (7 days)</mat-error>
+                }
+                <mat-hint>Session auto-resets after this many hours of inactivity</mat-hint>
               </mat-form-field>
             </mat-card-content>
           </mat-card>
@@ -305,7 +325,8 @@ export class TenantFormComponent implements OnInit {
     chatwoot_account_id: [null],
     chatwoot_inbox_id: [null],
     chatwoot_api_token: [''],
-    agent_timeout_seconds: [180, [Validators.min(30), Validators.max(3600)]],
+    agent_timeout_seconds: [180, [Validators.min(0), Validators.max(3600)]],
+    session_timeout_hours: [24, [Validators.min(1), Validators.max(168)]],
     timezone: ['Europe/Belgrade'],
     working_hours: this.fb.group(
       DAYS.reduce((acc, day) => {
@@ -314,6 +335,14 @@ export class TenantFormComponent implements OnInit {
       }, {} as Record<string, FormGroup>)
     ),
   });
+
+  getConversationModeHint(): string {
+    const value = this.form.get('agent_timeout_seconds')?.value;
+    if (value === 0) {
+      return 'AI-First Mode: AI responds immediately. Escalates to human when needed.';
+    }
+    return `Human-First Mode: Waits ${value} seconds for human agent, then AI responds.`;
+  }
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -377,7 +406,8 @@ export class TenantFormComponent implements OnInit {
       chatwoot_account_id: raw.chatwoot_account_id || undefined,
       chatwoot_inbox_id: raw.chatwoot_inbox_id || undefined,
       chatwoot_api_token: raw.chatwoot_api_token || undefined,
-      agent_timeout_seconds: raw.agent_timeout_seconds || undefined,
+      agent_timeout_seconds: raw.agent_timeout_seconds ?? undefined,
+      session_timeout_hours: raw.session_timeout_hours ?? undefined,
       timezone: raw.timezone || undefined,
       working_hours: Object.keys(workingHours).length ? workingHours : undefined,
       handover_keywords: this.handoverKeywords.length ? this.handoverKeywords : undefined,
@@ -432,7 +462,8 @@ export class TenantFormComponent implements OnInit {
           chatwoot_account_id: t.chatwoot_account_id,
           chatwoot_inbox_id: t.chatwoot_inbox_id,
           chatwoot_api_token: t.chatwoot_api_token || '',
-          agent_timeout_seconds: t.agent_timeout_seconds || 180,
+          agent_timeout_seconds: t.agent_timeout_seconds ?? 180,
+          session_timeout_hours: t.session_timeout_hours ?? 24,
           timezone: t.timezone || 'Europe/Belgrade',
         });
 

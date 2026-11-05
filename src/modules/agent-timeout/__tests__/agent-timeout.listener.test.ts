@@ -137,20 +137,42 @@ describe('agent-timeout.listener', () => {
     it('skips when tenant not found', async () => {
       mockAgentTimeout.getTimeoutData.mockResolvedValue(timeoutData);
       mockConversationService.clearPendingAgent.mockResolvedValue(undefined);
+      mockConversationService.setStatus.mockResolvedValue(undefined);
+      mockConversationService.invalidateCache.mockResolvedValue(undefined);
       mockTenantService.getById.mockResolvedValue(null);
 
       await messageHandler('__keyevent@0__:expired', 'agent_timeout:conv-1');
 
       expect(mockConversationService.clearPendingAgent).toHaveBeenCalledWith('conv-1');
+      expect(mockConversationService.setStatus).toHaveBeenCalledWith('conv-1', 'ai_active');
       expect(mockAiService.generateResponse).not.toHaveBeenCalled();
+    });
+
+    it('sets status to ai_active and invalidates cache on timeout', async () => {
+      mockAgentTimeout.getTimeoutData.mockResolvedValue(timeoutData);
+      mockConversationService.clearPendingAgent.mockResolvedValue(undefined);
+      mockConversationService.setStatus.mockResolvedValue(undefined);
+      mockConversationService.invalidateCache.mockResolvedValue(undefined);
+      mockTenantService.getById.mockResolvedValue(tenant as any);
+      mockConversationService.getRecentMessages.mockResolvedValue([]);
+      mockAiService.generateResponse.mockResolvedValue({ text: 'AI reply', shouldEscalate: false });
+      mockViberService.sendTextMessage.mockResolvedValue(undefined);
+      mockConversationService.addMessage.mockResolvedValue({} as any);
+
+      await messageHandler('__keyevent@0__:expired', 'agent_timeout:conv-1');
+
+      expect(mockConversationService.setStatus).toHaveBeenCalledWith('conv-1', 'ai_active');
+      expect(mockConversationService.invalidateCache).toHaveBeenCalledWith('t-1', 'viber', 'user-1');
     });
 
     it('full AI fallback flow for Viber: clears pending, generates AI, sends Viber, saves message', async () => {
       mockAgentTimeout.getTimeoutData.mockResolvedValue(timeoutData);
       mockConversationService.clearPendingAgent.mockResolvedValue(undefined);
+      mockConversationService.setStatus.mockResolvedValue(undefined);
+      mockConversationService.invalidateCache.mockResolvedValue(undefined);
       mockTenantService.getById.mockResolvedValue(tenant as any);
       mockConversationService.getRecentMessages.mockResolvedValue([]);
-      mockAiService.generateResponse.mockResolvedValue('AI fallback odgovor');
+      mockAiService.generateResponse.mockResolvedValue({ text: 'AI fallback odgovor', shouldEscalate: false });
       mockViberService.sendTextMessage.mockResolvedValue(undefined);
       mockConversationService.addMessage.mockResolvedValue({} as any);
 
@@ -186,9 +208,11 @@ describe('agent-timeout.listener', () => {
 
       mockAgentTimeout.getTimeoutData.mockResolvedValue(telegramTimeoutData);
       mockConversationService.clearPendingAgent.mockResolvedValue(undefined);
+      mockConversationService.setStatus.mockResolvedValue(undefined);
+      mockConversationService.invalidateCache.mockResolvedValue(undefined);
       mockTenantService.getById.mockResolvedValue(telegramTenant as any);
       mockConversationService.getRecentMessages.mockResolvedValue([]);
-      mockAiService.generateResponse.mockResolvedValue('TG AI fallback');
+      mockAiService.generateResponse.mockResolvedValue({ text: 'TG AI fallback', shouldEscalate: false });
       mockTelegramService.sendTextMessage.mockResolvedValue(undefined);
       mockConversationService.addMessage.mockResolvedValue({} as any);
 
@@ -198,6 +222,28 @@ describe('agent-timeout.listener', () => {
         'tg-token', '789', 'TG AI fallback'
       );
       expect(mockViberService.sendTextMessage).not.toHaveBeenCalled();
+    });
+
+    it('sets human_active when AI escalates after timeout', async () => {
+      mockAgentTimeout.getTimeoutData.mockResolvedValue(timeoutData);
+      mockConversationService.clearPendingAgent.mockResolvedValue(undefined);
+      mockConversationService.setStatus.mockResolvedValue(undefined);
+      mockConversationService.invalidateCache.mockResolvedValue(undefined);
+      mockTenantService.getById.mockResolvedValue(tenant as any);
+      mockConversationService.getRecentMessages.mockResolvedValue([]);
+      mockAiService.generateResponse.mockResolvedValue({
+        text: 'Prosleđujem vam...',
+        shouldEscalate: true,
+        escalationReason: 'Complex issue',
+      });
+      mockViberService.sendTextMessage.mockResolvedValue(undefined);
+      mockConversationService.addMessage.mockResolvedValue({} as any);
+
+      await messageHandler('__keyevent@0__:expired', 'agent_timeout:conv-1');
+
+      // First call is ai_active (on timeout), second is human_active (on escalation)
+      expect(mockConversationService.setStatus).toHaveBeenCalledWith('conv-1', 'ai_active');
+      expect(mockConversationService.setStatus).toHaveBeenCalledWith('conv-1', 'human_active');
     });
 
     it('logs AI response to Chatwoot when available', async () => {
@@ -213,9 +259,11 @@ describe('agent-timeout.listener', () => {
 
       mockAgentTimeout.getTimeoutData.mockResolvedValue(timeoutData);
       mockConversationService.clearPendingAgent.mockResolvedValue(undefined);
+      mockConversationService.setStatus.mockResolvedValue(undefined);
+      mockConversationService.invalidateCache.mockResolvedValue(undefined);
       mockTenantService.getById.mockResolvedValue(tenantWithChatwoot as any);
       mockConversationService.getRecentMessages.mockResolvedValue([]);
-      mockAiService.generateResponse.mockResolvedValue('AI reply');
+      mockAiService.generateResponse.mockResolvedValue({ text: 'AI reply', shouldEscalate: false });
       mockViberService.sendTextMessage.mockResolvedValue(undefined);
       mockConversationService.addMessage.mockResolvedValue({} as any);
       mockConversationService.getOrCreate.mockResolvedValue(conv as any);
@@ -235,9 +283,11 @@ describe('agent-timeout.listener', () => {
     it('does not log to Chatwoot when tenant has no chatwoot_api_token', async () => {
       mockAgentTimeout.getTimeoutData.mockResolvedValue(timeoutData);
       mockConversationService.clearPendingAgent.mockResolvedValue(undefined);
+      mockConversationService.setStatus.mockResolvedValue(undefined);
+      mockConversationService.invalidateCache.mockResolvedValue(undefined);
       mockTenantService.getById.mockResolvedValue(tenant as any);
       mockConversationService.getRecentMessages.mockResolvedValue([]);
-      mockAiService.generateResponse.mockResolvedValue('AI reply');
+      mockAiService.generateResponse.mockResolvedValue({ text: 'AI reply', shouldEscalate: false });
       mockViberService.sendTextMessage.mockResolvedValue(undefined);
       mockConversationService.addMessage.mockResolvedValue({} as any);
 
@@ -257,9 +307,11 @@ describe('agent-timeout.listener', () => {
 
       mockAgentTimeout.getTimeoutData.mockResolvedValue(timeoutData);
       mockConversationService.clearPendingAgent.mockResolvedValue(undefined);
+      mockConversationService.setStatus.mockResolvedValue(undefined);
+      mockConversationService.invalidateCache.mockResolvedValue(undefined);
       mockTenantService.getById.mockResolvedValue(tenantWithChatwoot as any);
       mockConversationService.getRecentMessages.mockResolvedValue([]);
-      mockAiService.generateResponse.mockResolvedValue('AI reply');
+      mockAiService.generateResponse.mockResolvedValue({ text: 'AI reply', shouldEscalate: false });
       mockViberService.sendTextMessage.mockResolvedValue(undefined);
       mockConversationService.addMessage.mockResolvedValue({} as any);
       mockConversationService.getOrCreate.mockResolvedValue(convNoChatwoot as any);

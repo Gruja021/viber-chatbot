@@ -1,7 +1,7 @@
 import { redis } from '../../config/redis';
 import { logger } from '../../config/logger';
 import { conversationRepository } from './conversation.repository';
-import { Conversation, Message, MessageRole } from './conversation.model';
+import { Conversation, ConversationStatus, Message, MessageRole } from './conversation.model';
 import { Platform } from '../../types/platform';
 
 const CONV_TTL = 1800; // 30 min
@@ -15,13 +15,34 @@ export const conversationService = {
     tenantId: string,
     platform: Platform,
     platformUserId: string,
-    platformUserName: string | null
+    platformUserName: string | null,
+    sessionTimeoutHours?: number
   ): Promise<Conversation> {
     const key = cacheKey(tenantId, platform, platformUserId);
 
     const cached = await redis.get(key);
     if (cached) {
       const conv = JSON.parse(cached) as Conversation;
+
+      // Check if conversation is closed — reset for new session
+      if (conv.conversation_status === 'closed') {
+        await conversationRepository.resetConversation(conv.id);
+        await redis.del(key);
+        return this.getOrCreate(tenantId, platform, platformUserId, platformUserName, sessionTimeoutHours);
+      }
+
+      // Check session timeout — auto-reset after N hours of inactivity
+      if (sessionTimeoutHours && conv.updated_at) {
+        const updatedAt = new Date(conv.updated_at).getTime();
+        const timeoutMs = sessionTimeoutHours * 60 * 60 * 1000;
+        if (Date.now() - updatedAt > timeoutMs) {
+          logger.info({ conversationId: conv.id }, 'Session timeout expired, resetting conversation');
+          await conversationRepository.resetConversation(conv.id);
+          await redis.del(key);
+          return this.getOrCreate(tenantId, platform, platformUserId, platformUserName, sessionTimeoutHours);
+        }
+      }
+
       // Check if handover has expired
       if (conv.is_handover && conv.handover_until && new Date(conv.handover_until) < new Date()) {
         await conversationRepository.clearHandover(conv.id);
@@ -34,10 +55,45 @@ export const conversationService = {
 
     const conversation = await conversationRepository.create(tenantId, platform, platformUserId, platformUserName);
 
+    // Check if conversation was fetched from DB (upsert) and needs reset
+    if (conversation.conversation_status === 'closed') {
+      await conversationRepository.resetConversation(conversation.id);
+      const fresh = await conversationRepository.findByTenantAndUser(tenantId, platform, platformUserId);
+      if (fresh) {
+        await redis.setex(key, CONV_TTL, JSON.stringify(fresh));
+        return fresh;
+      }
+    }
+
+    // Check session timeout on DB-fetched conversation
+    if (sessionTimeoutHours && conversation.updated_at) {
+      const updatedAt = new Date(conversation.updated_at).getTime();
+      const timeoutMs = sessionTimeoutHours * 60 * 60 * 1000;
+      if (Date.now() - updatedAt > timeoutMs && conversation.conversation_status !== 'ai_active') {
+        logger.info({ conversationId: conversation.id }, 'Session timeout expired on DB fetch, resetting');
+        await conversationRepository.resetConversation(conversation.id);
+        const fresh = await conversationRepository.findByTenantAndUser(tenantId, platform, platformUserId);
+        if (fresh) {
+          await redis.setex(key, CONV_TTL, JSON.stringify(fresh));
+          return fresh;
+        }
+      }
+    }
+
     await redis.setex(key, CONV_TTL, JSON.stringify(conversation));
     logger.debug({ conversationId: conversation.id, tenantId, platform, platformUserId }, 'Conversation loaded');
 
     return conversation;
+  },
+
+  async setStatus(conversationId: string, status: ConversationStatus): Promise<void> {
+    await conversationRepository.setStatus(conversationId, status);
+  },
+
+  async invalidateCache(tenantId: string, platform: Platform, platformUserId: string): Promise<void> {
+    const key = cacheKey(tenantId, platform, platformUserId);
+    await redis.del(key);
+    logger.debug({ tenantId, platform, platformUserId }, 'Conversation cache invalidated');
   },
 
   async setChatwootConversationId(conversationId: string, chatwootId: number): Promise<void> {

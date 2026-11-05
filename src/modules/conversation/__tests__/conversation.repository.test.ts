@@ -130,6 +130,74 @@ describe('conversationRepository', () => {
     });
   });
 
+  describe('setStatus', () => {
+    it('updates conversation_status', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+      await conversationRepository.setStatus('conv-1', 'human_active');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('conversation_status'),
+        ['human_active', 'conv-1']
+      );
+    });
+
+    it('updates with ai_active status', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+      await conversationRepository.setStatus('conv-1', 'ai_active');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('conversation_status'),
+        ['ai_active', 'conv-1']
+      );
+    });
+
+    it('updates with closed status', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+      await conversationRepository.setStatus('conv-1', 'closed');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('conversation_status'),
+        ['closed', 'conv-1']
+      );
+    });
+
+    it('updates with pending_human status', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+      await conversationRepository.setStatus('conv-1', 'pending_human');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('conversation_status'),
+        ['pending_human', 'conv-1']
+      );
+    });
+  });
+
+  describe('resetConversation', () => {
+    it('resets conversation to fresh state', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+      await conversationRepository.resetConversation('conv-1');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining("conversation_status = 'ai_active'"),
+        ['conv-1']
+      );
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('is_handover = FALSE'),
+        expect.any(Array)
+      );
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('chatwoot_conversation_id = NULL'),
+        expect.any(Array)
+      );
+    });
+
+    it('resets all state fields including pending_agent and agent_routed_at', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+      await conversationRepository.resetConversation('conv-1');
+
+      const query = mockQuery.mock.calls[0][0];
+      expect(query).toContain('pending_agent_response = FALSE');
+      expect(query).toContain('agent_routed_at = NULL');
+      expect(query).toContain('handover_until = NULL');
+      expect(query).toContain('updated_at = NOW()');
+    });
+  });
+
   describe('findByChatwootConversationId', () => {
     it('returns conversation when found', async () => {
       const conv = { id: 'conv-1', chatwoot_conversation_id: 42 };

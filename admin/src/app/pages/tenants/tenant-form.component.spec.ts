@@ -96,14 +96,36 @@ describe('TenantFormComponent', () => {
       expect(component.form.get('agent_timeout_seconds')?.value).toBe(180);
     });
 
-    it('should validate agent_timeout_seconds min 30', () => {
-      component.form.get('agent_timeout_seconds')?.setValue(10);
+    it('should validate agent_timeout_seconds min 0', () => {
+      component.form.get('agent_timeout_seconds')?.setValue(-1);
       expect(component.form.get('agent_timeout_seconds')?.hasError('min')).toBeTrue();
+
+      component.form.get('agent_timeout_seconds')?.setValue(0);
+      expect(component.form.get('agent_timeout_seconds')?.hasError('min')).toBeFalse();
     });
 
     it('should validate agent_timeout_seconds max 3600', () => {
       component.form.get('agent_timeout_seconds')?.setValue(5000);
       expect(component.form.get('agent_timeout_seconds')?.hasError('max')).toBeTrue();
+    });
+
+    it('should allow agent_timeout_seconds of 0 (AI-First mode)', () => {
+      component.form.get('agent_timeout_seconds')?.setValue(0);
+      expect(component.form.get('agent_timeout_seconds')?.valid).toBeTrue();
+    });
+
+    it('should have default session_timeout_hours 24', () => {
+      expect(component.form.get('session_timeout_hours')?.value).toBe(24);
+    });
+
+    it('should validate session_timeout_hours min 1', () => {
+      component.form.get('session_timeout_hours')?.setValue(0);
+      expect(component.form.get('session_timeout_hours')?.hasError('min')).toBeTrue();
+    });
+
+    it('should validate session_timeout_hours max 168', () => {
+      component.form.get('session_timeout_hours')?.setValue(200);
+      expect(component.form.get('session_timeout_hours')?.hasError('max')).toBeTrue();
     });
 
     it('should have empty openai_api_key initially', () => {
@@ -126,6 +148,32 @@ describe('TenantFormComponent', () => {
       const req = httpTesting.expectOne('/api/tenants');
       expect(req.request.body.openai_api_key).toBe('sk-test-123');
       expect(req.request.body.openai_model).toBe('gpt-4o-mini');
+      req.flush(makeTenant({ id: 'new-id', slug: 'ai-co' }));
+    });
+
+    it('should include agent_timeout_seconds=0 in payload (falsy value fix)', () => {
+      component.form.patchValue({
+        slug: 'ai-co',
+        firm_name: 'AI Co',
+        agent_timeout_seconds: 0,
+      });
+      component.onSubmit();
+
+      const req = httpTesting.expectOne('/api/tenants');
+      expect(req.request.body.agent_timeout_seconds).toBe(0);
+      req.flush(makeTenant({ id: 'new-id', slug: 'ai-co' }));
+    });
+
+    it('should include session_timeout_hours in create payload', () => {
+      component.form.patchValue({
+        slug: 'ai-co',
+        firm_name: 'AI Co',
+        session_timeout_hours: 48,
+      });
+      component.onSubmit();
+
+      const req = httpTesting.expectOne('/api/tenants');
+      expect(req.request.body.session_timeout_hours).toBe(48);
       req.flush(makeTenant({ id: 'new-id', slug: 'ai-co' }));
     });
 
@@ -198,6 +246,30 @@ describe('TenantFormComponent', () => {
       expect(component.form.get('agent_timeout_seconds')?.value).toBe(300);
     });
 
+    it('should load agent_timeout_seconds=0 from tenant (falsy value fix)', () => {
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(
+        makeTenant({ agent_timeout_seconds: 0 })
+      );
+      expect(component.form.get('agent_timeout_seconds')?.value).toBe(0);
+    });
+
+    it('should load session_timeout_hours from tenant', () => {
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(
+        makeTenant({ session_timeout_hours: 48 })
+      );
+      expect(component.form.get('session_timeout_hours')?.value).toBe(48);
+    });
+
+    it('should load session_timeout_hours correctly when value is falsy-adjacent', () => {
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(
+        makeTenant({ session_timeout_hours: 1 })
+      );
+      expect(component.form.get('session_timeout_hours')?.value).toBe(1);
+    });
+
     it('should load openai_api_key from tenant', () => {
       fixture.detectChanges();
       httpTesting.expectOne('/api/tenants/tenant-1').flush(
@@ -264,6 +336,19 @@ describe('TenantFormComponent', () => {
       req.flush(makeTenant({ agent_timeout_seconds: 300 }));
     });
 
+    it('should include session_timeout_hours in update payload', () => {
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+      component.form.patchValue({ session_timeout_hours: 72 });
+      component.onSubmit();
+
+      const req = httpTesting.expectOne('/api/tenants/tenant-1');
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body.session_timeout_hours).toBe(72);
+      req.flush(makeTenant({ session_timeout_hours: 72 }));
+    });
+
     it('should submit update tenant', () => {
       fixture.detectChanges();
       httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
@@ -290,6 +375,25 @@ describe('TenantFormComponent', () => {
       );
 
       expect(snackBar.open).toHaveBeenCalledWith('Update failed', 'OK', jasmine.any(Object));
+    });
+  });
+
+  // ---- Conversation Mode hints ----
+  describe('Conversation Mode', () => {
+    beforeEach(() => {
+      setup(null);
+      fixture.detectChanges();
+    });
+
+    it('should show AI-First hint when agent_timeout is 0', () => {
+      component.form.get('agent_timeout_seconds')?.setValue(0);
+      expect(component.getConversationModeHint()).toContain('AI-First');
+    });
+
+    it('should show Human-First hint when agent_timeout > 0', () => {
+      component.form.get('agent_timeout_seconds')?.setValue(120);
+      expect(component.getConversationModeHint()).toContain('Human-First');
+      expect(component.getConversationModeHint()).toContain('120');
     });
   });
 

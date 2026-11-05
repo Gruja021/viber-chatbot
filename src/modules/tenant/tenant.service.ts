@@ -19,6 +19,7 @@ function toPublic(tenant: Tenant): TenantPublic {
     working_hours: tenant.working_hours,
     handover_keywords: tenant.handover_keywords,
     agent_timeout_seconds: tenant.agent_timeout_seconds,
+    session_timeout_hours: tenant.session_timeout_hours,
     status: tenant.status,
     created_at: tenant.created_at,
     updated_at: tenant.updated_at,

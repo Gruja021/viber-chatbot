@@ -23,6 +23,7 @@ const makeTenant = (overrides: Partial<Tenant> = {}): Tenant => ({
   working_hours: {},
   handover_keywords: [],
   agent_timeout_seconds: 180,
+  session_timeout_hours: 24,
   status: 'active',
   created_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
   updated_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
@@ -116,6 +117,26 @@ describe('tenantService', () => {
     });
   });
 
+  describe('getAll', () => {
+    it('returns all tenants as public objects', async () => {
+      const tenants = [makeTenant(), makeTenant({ id: 'uuid-2', slug: 'second' })];
+      mockRepo.findAll.mockResolvedValue(tenants);
+
+      const result = await tenantService.getAll();
+      expect(result).toHaveLength(2);
+      expect(result[0]).not.toHaveProperty('viber_auth_token');
+      expect(result[0]).not.toHaveProperty('chatwoot_api_token');
+      expect(result[0]).toHaveProperty('id', 'uuid-1');
+      expect(result[1]).toHaveProperty('id', 'uuid-2');
+    });
+
+    it('returns empty array when no tenants exist', async () => {
+      mockRepo.findAll.mockResolvedValue([]);
+      const result = await tenantService.getAll();
+      expect(result).toEqual([]);
+    });
+  });
+
   describe('toPublic', () => {
     it('includes agent_timeout_seconds in public tenant', async () => {
       const tenant = makeTenant({ agent_timeout_seconds: 300 });
@@ -123,6 +144,14 @@ describe('tenantService', () => {
 
       const result = await tenantService.create({ slug: 'x', firm_name: 'X' });
       expect(result).toHaveProperty('agent_timeout_seconds', 300);
+    });
+
+    it('includes session_timeout_hours in public tenant', async () => {
+      const tenant = makeTenant({ session_timeout_hours: 48 });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X' });
+      expect(result).toHaveProperty('session_timeout_hours', 48);
     });
 
     it('strips sensitive fields from public tenant', async () => {
@@ -138,6 +167,7 @@ describe('tenantService', () => {
       expect(result).toHaveProperty('working_hours');
       expect(result).toHaveProperty('handover_keywords');
       expect(result).toHaveProperty('agent_timeout_seconds');
+      expect(result).toHaveProperty('session_timeout_hours');
     });
   });
 

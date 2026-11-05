@@ -18,6 +18,7 @@ const makeConversation = (overrides: Partial<Conversation> = {}): Conversation =
   handover_until: null,
   pending_agent_response: false,
   agent_routed_at: null,
+  conversation_status: 'ai_active',
   created_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
   updated_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
   ...overrides,
@@ -91,6 +92,192 @@ describe('conversationService', () => {
         1800,
         expect.any(String)
       );
+    });
+
+    it('resets conversation when status is closed (cache hit)', async () => {
+      const closedConv = makeConversation({ conversation_status: 'closed' });
+      const freshConv = makeConversation({ conversation_status: 'ai_active' });
+
+      // First call returns closed, second call (after reset) returns fresh
+      mockRedis.get
+        .mockResolvedValueOnce(JSON.stringify(closedConv))
+        .mockResolvedValueOnce(null);
+      mockRepo.resetConversation.mockResolvedValue(undefined);
+      mockRedis.del.mockResolvedValue(1);
+      mockRepo.create.mockResolvedValue(freshConv);
+
+      const result = await conversationService.getOrCreate('t-1', 'viber', 'v-1', 'Test User');
+
+      expect(mockRepo.resetConversation).toHaveBeenCalledWith('conv-1');
+      expect(mockRedis.del).toHaveBeenCalledWith('conv:t-1:viber:v-1');
+      expect(result.conversation_status).toBe('ai_active');
+    });
+
+    it('resets conversation when status is closed (DB hit via upsert)', async () => {
+      const closedConv = makeConversation({ conversation_status: 'closed' });
+      const freshConv = makeConversation({ conversation_status: 'ai_active' });
+
+      mockRedis.get.mockResolvedValue(null);
+      mockRepo.create.mockResolvedValue(closedConv);
+      mockRepo.resetConversation.mockResolvedValue(undefined);
+      mockRepo.findByTenantAndUser.mockResolvedValue(freshConv);
+
+      const result = await conversationService.getOrCreate('t-1', 'viber', 'v-1', 'Test User');
+
+      expect(mockRepo.resetConversation).toHaveBeenCalledWith('conv-1');
+      expect(result.conversation_status).toBe('ai_active');
+    });
+
+    it('resets conversation when session timeout expired (cache hit)', async () => {
+      const oldDate = new Date(Date.now() - 25 * 60 * 60 * 1000); // 25 hours ago
+      const staleConv = makeConversation({
+        conversation_status: 'human_active',
+        updated_at: oldDate as any,
+      });
+      const freshConv = makeConversation({ conversation_status: 'ai_active' });
+
+      mockRedis.get
+        .mockResolvedValueOnce(JSON.stringify(staleConv))
+        .mockResolvedValueOnce(null);
+      mockRepo.resetConversation.mockResolvedValue(undefined);
+      mockRedis.del.mockResolvedValue(1);
+      mockRepo.create.mockResolvedValue(freshConv);
+
+      const result = await conversationService.getOrCreate('t-1', 'viber', 'v-1', 'Test User', 24);
+
+      expect(mockRepo.resetConversation).toHaveBeenCalledWith('conv-1');
+      expect(result.conversation_status).toBe('ai_active');
+    });
+
+    it('does not reset when session timeout not expired', async () => {
+      const recentDate = new Date(Date.now() - 1 * 60 * 60 * 1000); // 1 hour ago
+      const conv = makeConversation({
+        conversation_status: 'human_active',
+        updated_at: recentDate as any,
+      });
+
+      mockRedis.get.mockResolvedValue(JSON.stringify(conv));
+
+      const result = await conversationService.getOrCreate('t-1', 'viber', 'v-1', 'Test User', 24);
+
+      expect(mockRepo.resetConversation).not.toHaveBeenCalled();
+      expect(result.conversation_status).toBe('human_active');
+    });
+
+    it('resets conversation when session timeout expired with pending_human status', async () => {
+      const oldDate = new Date(Date.now() - 50 * 60 * 60 * 1000); // 50 hours ago
+      const staleConv = makeConversation({
+        conversation_status: 'pending_human',
+        updated_at: oldDate as any,
+      });
+      const freshConv = makeConversation({ conversation_status: 'ai_active' });
+
+      mockRedis.get
+        .mockResolvedValueOnce(JSON.stringify(staleConv))
+        .mockResolvedValueOnce(null);
+      mockRepo.resetConversation.mockResolvedValue(undefined);
+      mockRedis.del.mockResolvedValue(1);
+      mockRepo.create.mockResolvedValue(freshConv);
+
+      const result = await conversationService.getOrCreate('t-1', 'viber', 'v-1', 'Test User', 24);
+
+      expect(mockRepo.resetConversation).toHaveBeenCalledWith('conv-1');
+      expect(result.conversation_status).toBe('ai_active');
+    });
+
+    it('resets conversation when session timeout expired (DB path)', async () => {
+      const oldDate = new Date(Date.now() - 30 * 60 * 60 * 1000); // 30 hours ago
+      const staleConv = makeConversation({
+        conversation_status: 'human_active',
+        updated_at: oldDate as any,
+      });
+      const freshConv = makeConversation({ conversation_status: 'ai_active' });
+
+      mockRedis.get.mockResolvedValue(null);
+      mockRepo.create.mockResolvedValue(staleConv);
+      mockRepo.resetConversation.mockResolvedValue(undefined);
+      mockRepo.findByTenantAndUser.mockResolvedValue(freshConv);
+
+      const result = await conversationService.getOrCreate('t-1', 'viber', 'v-1', 'Test User', 24);
+
+      expect(mockRepo.resetConversation).toHaveBeenCalledWith('conv-1');
+      expect(result.conversation_status).toBe('ai_active');
+    });
+
+    it('resets ai_active conversation when session timeout expired (cache path has no status filter)', async () => {
+      const oldDate = new Date(Date.now() - 100 * 60 * 60 * 1000); // 100 hours ago
+      const staleConv = makeConversation({
+        conversation_status: 'ai_active',
+        updated_at: oldDate as any,
+      });
+      const freshConv = makeConversation({ conversation_status: 'ai_active' });
+
+      mockRedis.get
+        .mockResolvedValueOnce(JSON.stringify(staleConv))
+        .mockResolvedValueOnce(null);
+      mockRepo.resetConversation.mockResolvedValue(undefined);
+      mockRedis.del.mockResolvedValue(1);
+      mockRepo.create.mockResolvedValue(freshConv);
+
+      const result = await conversationService.getOrCreate('t-1', 'viber', 'v-1', 'Test User', 24);
+
+      // Cache path resets regardless of status (including ai_active)
+      expect(mockRepo.resetConversation).toHaveBeenCalledWith('conv-1');
+      expect(result.conversation_status).toBe('ai_active');
+    });
+
+    it('does not reset ai_active conversation on DB path (only resets non-ai_active)', async () => {
+      const oldDate = new Date(Date.now() - 100 * 60 * 60 * 1000); // 100 hours ago
+      const staleConv = makeConversation({
+        conversation_status: 'ai_active',
+        updated_at: oldDate as any,
+      });
+
+      mockRedis.get.mockResolvedValue(null);
+      mockRepo.create.mockResolvedValue(staleConv);
+
+      const result = await conversationService.getOrCreate('t-1', 'viber', 'v-1', 'Test User', 24);
+
+      // DB path checks conversation_status !== 'ai_active', so no reset
+      expect(mockRepo.resetConversation).not.toHaveBeenCalled();
+      expect(result.conversation_status).toBe('ai_active');
+    });
+
+    it('does not check session timeout when sessionTimeoutHours not provided', async () => {
+      const oldDate = new Date(Date.now() - 100 * 60 * 60 * 1000); // 100 hours ago
+      const conv = makeConversation({
+        conversation_status: 'human_active',
+        updated_at: oldDate as any,
+      });
+
+      mockRedis.get.mockResolvedValue(JSON.stringify(conv));
+
+      const result = await conversationService.getOrCreate('t-1', 'viber', 'v-1', 'Test User');
+
+      expect(mockRepo.resetConversation).not.toHaveBeenCalled();
+      expect(result.conversation_status).toBe('human_active');
+    });
+  });
+
+  describe('setStatus', () => {
+    it('delegates to repository', async () => {
+      mockRepo.setStatus.mockResolvedValue(undefined);
+      await conversationService.setStatus('conv-1', 'human_active');
+      expect(mockRepo.setStatus).toHaveBeenCalledWith('conv-1', 'human_active');
+    });
+  });
+
+  describe('invalidateCache', () => {
+    it('deletes Redis cache key', async () => {
+      mockRedis.del.mockResolvedValue(1);
+      await conversationService.invalidateCache('t-1', 'viber', 'v-1');
+      expect(mockRedis.del).toHaveBeenCalledWith('conv:t-1:viber:v-1');
+    });
+
+    it('uses correct key for Telegram', async () => {
+      mockRedis.del.mockResolvedValue(1);
+      await conversationService.invalidateCache('t-1', 'telegram', '123');
+      expect(mockRedis.del).toHaveBeenCalledWith('conv:t-1:telegram:123');
     });
   });
 

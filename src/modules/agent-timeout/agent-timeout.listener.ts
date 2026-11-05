@@ -80,8 +80,10 @@ async function handleTimeoutExpiry(conversationId: string): Promise<void> {
     return;
   }
 
-  // 2. Clear pending agent state
+  // 2. Clear pending agent state and set status to ai_active
   await conversationService.clearPendingAgent(data.conversationId);
+  await conversationService.setStatus(data.conversationId, 'ai_active');
+  await conversationService.invalidateCache(data.tenantId, data.platform, data.platformUserId);
 
   // 3. Load tenant for AI generation
   const tenant = await tenantService.getById(data.tenantId);
@@ -92,15 +94,20 @@ async function handleTimeoutExpiry(conversationId: string): Promise<void> {
 
   // 4. Generate AI response
   const recentMessages = await conversationService.getRecentMessages(data.conversationId, 20);
-  const replyText = await aiService.generateResponse(tenant, recentMessages, data.userMessage);
+  const aiResponse = await aiService.generateResponse(tenant, recentMessages, data.userMessage);
 
   // 5. Send to correct platform
-  await sendPlatformMessage(tenant, data.platform, data.platformUserId, replyText);
+  await sendPlatformMessage(tenant, data.platform, data.platformUserId, aiResponse.text);
 
   // 6. Save assistant message
-  await conversationService.addMessage(data.conversationId, 'assistant', replyText);
+  await conversationService.addMessage(data.conversationId, 'assistant', aiResponse.text);
 
-  // 7. Log in Chatwoot if available
+  // 7. If AI escalates, set human_active
+  if (aiResponse.shouldEscalate) {
+    await conversationService.setStatus(data.conversationId, 'human_active');
+  }
+
+  // 8. Log in Chatwoot if available
   if (tenant.chatwoot_api_token) {
     const conversation = await conversationService.getOrCreate(
       data.tenantId,
@@ -114,7 +121,7 @@ async function handleTimeoutExpiry(conversationId: string): Promise<void> {
         chatwootApiToken: tenant.chatwoot_api_token,
         chatwootAccountId: tenant.chatwoot_account_id!,
         conversationId: conversation.chatwoot_conversation_id,
-        content: `[AI Bot - agent timeout] ${replyText}`,
+        content: `[AI Bot - agent timeout] ${aiResponse.text}`,
         messageType: 'outgoing',
       });
     }

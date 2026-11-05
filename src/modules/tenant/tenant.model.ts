@@ -26,6 +26,7 @@ export interface Tenant {
   working_hours: WorkingHours;
   handover_keywords: string[];
   agent_timeout_seconds: number;
+  session_timeout_hours: number;
   status: TenantStatus;
   created_at: Date;
   updated_at: Date;
@@ -46,6 +47,7 @@ export interface CreateTenantInput {
   working_hours?: WorkingHours;
   handover_keywords?: string[];
   agent_timeout_seconds?: number;
+  session_timeout_hours?: number;
 }
 
 export interface UpdateTenantInput {
@@ -63,6 +65,7 @@ export interface UpdateTenantInput {
   working_hours?: WorkingHours;
   handover_keywords?: string[];
   agent_timeout_seconds?: number;
+  session_timeout_hours?: number;
   status?: TenantStatus;
 }
 
@@ -78,6 +81,7 @@ export interface TenantPublic {
   working_hours: WorkingHours;
   handover_keywords: string[];
   agent_timeout_seconds: number;
+  session_timeout_hours: number;
   status: TenantStatus;
   created_at: Date;
   updated_at: Date;

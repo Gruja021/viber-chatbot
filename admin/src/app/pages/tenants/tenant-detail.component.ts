@@ -148,7 +148,11 @@ import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
                 </mat-list-item>
                 <mat-list-item>
                   <span matListItemTitle>Agent Timeout</span>
-                  <span matListItemLine>{{ tenant()!.agent_timeout_seconds }}s</span>
+                  <span matListItemLine>{{ tenant()!.agent_timeout_seconds }}s ({{ tenant()!.agent_timeout_seconds === 0 ? 'AI-First' : 'Human-First' }})</span>
+                </mat-list-item>
+                <mat-list-item>
+                  <span matListItemTitle>Session Timeout</span>
+                  <span matListItemLine>{{ tenant()!.session_timeout_hours }}h</span>
                 </mat-list-item>
               </mat-list>
             </mat-card-content>

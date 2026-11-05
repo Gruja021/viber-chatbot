@@ -28,6 +28,24 @@ const SEARCH_TOOL: OpenAI.Chat.Completions.ChatCompletionTool = {
   },
 };
 
+const ESCALATE_TOOL: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'escalate_to_human',
+    description: 'Escalate to a human agent when you cannot resolve the issue, need to check with colleagues, or the customer requests to speak with a person.',
+    parameters: {
+      type: 'object',
+      properties: {
+        reason: {
+          type: 'string',
+          description: 'The reason for escalation',
+        },
+      },
+      required: ['reason'],
+    },
+  },
+};
+
 function buildSystemMessage(tenant: Tenant, hasConnector: boolean): string {
   let prompt = ANTI_HALLUCINATION_PREFIX;
   if (tenant.system_prompt) {
@@ -58,26 +76,35 @@ function formatMessages(
   return messages;
 }
 
+function buildTools(hasConnector: boolean, hasChatwoot: boolean): OpenAI.Chat.Completions.ChatCompletionTool[] | undefined {
+  const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [];
+  if (hasConnector) tools.push(SEARCH_TOOL);
+  if (hasChatwoot) tools.push(ESCALATE_TOOL);
+  return tools.length > 0 ? tools : undefined;
+}
+
 export const aiService = {
   async generateResponse(
     tenant: Tenant,
     conversationHistory: Message[],
     userMessage: string
-  ): Promise<string> {
+  ): Promise<AIResponse> {
     try {
       const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
       const connector = createConnector(tenant);
       const hasConnector = connector !== null;
+      const hasChatwoot = !!(tenant.chatwoot_api_token);
 
       const systemMessage = buildSystemMessage(tenant, hasConnector);
       const messages = formatMessages(systemMessage, conversationHistory, userMessage);
+      const tools = buildTools(hasConnector, hasChatwoot);
 
       let response = await client.chat.completions.create({
         model: MODEL,
         temperature: 0.3,
         max_tokens: 1024,
         messages,
-        tools: hasConnector ? [SEARCH_TOOL] : undefined,
+        tools,
       });
 
       let functionCallCount = 0;
@@ -91,8 +118,18 @@ export const aiService = {
         messages.push(response.choices[0].message);
 
         for (const toolCall of toolCalls) {
-          if (toolCall.type !== 'function' || !connector) continue;
-          if (toolCall.function.name === 'search_database') {
+          if (toolCall.type !== 'function') continue;
+
+          if (toolCall.function.name === 'escalate_to_human') {
+            const args = JSON.parse(toolCall.function.arguments);
+            return {
+              text: 'Za ovo pitanje bi bilo najbolje da proverim sa kolegama. Prosleđujem vaš zahtev našem timu.',
+              shouldEscalate: true,
+              escalationReason: args.reason,
+            };
+          }
+
+          if (toolCall.function.name === 'search_database' && connector) {
             const args = JSON.parse(toolCall.function.arguments);
             const result = await connector.query(args.search_term);
 
@@ -111,25 +148,34 @@ export const aiService = {
           temperature: 0.3,
           max_tokens: 1024,
           messages,
-          tools: [SEARCH_TOOL],
+          tools,
         });
       }
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
         logger.warn({ tenantId: tenant.id }, 'AI returned empty response');
-        return 'Izvините, nisam uspeo da generišem odgovor. Pokušajte ponovo.';
+        return {
+          text: 'Извините, nisam uspeo da generišem odgovor. Pokušajte ponovo.',
+          shouldEscalate: false,
+        };
       }
 
-      return content;
+      return { text: content, shouldEscalate: false };
     } catch (err: any) {
       logger.error({ err, tenantId: tenant.id }, 'AI response generation failed');
 
       if (err?.status === 429) {
-        return 'Trenutno imam povećan broj zahteva. Molim vas pokušajte ponovo za koji minut.';
+        return {
+          text: 'Trenutno imam povećan broj zahteva. Molim vas pokušajte ponovo za koji minut.',
+          shouldEscalate: false,
+        };
       }
 
-      return 'Došlo je do greške prilikom obrade vaše poruke. Pokušajte ponovo kasnije.';
+      return {
+        text: 'Došlo je do greške prilikom obrade vaše poruke. Pokušajte ponovo kasnije.',
+        shouldEscalate: false,
+      };
     }
   },
 };

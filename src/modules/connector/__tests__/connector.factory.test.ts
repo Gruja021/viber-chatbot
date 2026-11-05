@@ -26,6 +26,7 @@ function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     working_hours: {},
     handover_keywords: [],
     agent_timeout_seconds: 180,
+    session_timeout_hours: 24,
     status: 'active',
     created_at: new Date(),
     updated_at: new Date(),

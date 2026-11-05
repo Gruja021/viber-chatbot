@@ -1,5 +1,5 @@
 import { pool } from '../../config/database';
-import { Conversation, Message, MessageRole } from './conversation.model';
+import { Conversation, ConversationStatus, Message, MessageRole } from './conversation.model';
 import { Platform } from '../../types/platform';
 
 export const conversationRepository = {
@@ -59,6 +59,28 @@ export const conversationRepository = {
   async clearPendingAgent(id: string): Promise<void> {
     await pool.query(
       'UPDATE conversations SET pending_agent_response = FALSE, agent_routed_at = NULL, updated_at = NOW() WHERE id = $1',
+      [id]
+    );
+  },
+
+  async setStatus(id: string, status: ConversationStatus): Promise<void> {
+    await pool.query(
+      'UPDATE conversations SET conversation_status = $1, updated_at = NOW() WHERE id = $2',
+      [status, id]
+    );
+  },
+
+  async resetConversation(id: string): Promise<void> {
+    await pool.query(
+      `UPDATE conversations SET
+        conversation_status = 'ai_active',
+        is_handover = FALSE,
+        handover_until = NULL,
+        pending_agent_response = FALSE,
+        agent_routed_at = NULL,
+        chatwoot_conversation_id = NULL,
+        updated_at = NOW()
+      WHERE id = $1`,
       [id]
     );
   },

@@ -100,6 +100,40 @@ describe('tenantRepository', () => {
       );
     });
 
+    it('creates tenant with explicit session_timeout_hours', async () => {
+      const input = {
+        slug: 'new-tenant',
+        firm_name: 'New Firm',
+        session_timeout_hours: 48,
+      };
+      const created = { id: 'uuid-new', ...input };
+      mockQuery.mockResolvedValue({ rows: [created] });
+
+      const result = await tenantRepository.create(input);
+      expect(result).toEqual(created);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO tenants'),
+        expect.arrayContaining([48])
+      );
+    });
+
+    it('creates tenant with agent_timeout_seconds=0 (AI-First mode)', async () => {
+      const input = {
+        slug: 'ai-first',
+        firm_name: 'AI First Co',
+        agent_timeout_seconds: 0,
+      };
+      const created = { id: 'uuid-ai', ...input };
+      mockQuery.mockResolvedValue({ rows: [created] });
+
+      const result = await tenantRepository.create(input);
+      expect(result).toEqual(created);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO tenants'),
+        expect.arrayContaining([0])
+      );
+    });
+
     it('creates tenant with encrypted database_credentials', async () => {
       const input = {
         slug: 'new-tenant',
@@ -263,6 +297,15 @@ describe('tenantRepository', () => {
       );
     });
 
+    it('updates session_timeout_hours field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { session_timeout_hours: 48 });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('session_timeout_hours = $1'),
+        [48, 'uuid-1']
+      );
+    });
+
     it('updates status field', async () => {
       mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
       await tenantRepository.update('uuid-1', { status: 'suspended' });
@@ -292,16 +335,18 @@ describe('tenantRepository', () => {
         working_hours: { monday: { start: '09:00', end: '17:00' } },
         handover_keywords: ['help'],
         agent_timeout_seconds: 300,
+        session_timeout_hours: 48,
         status: 'inactive',
       });
 
       const [query, values] = mockQuery.mock.calls[0];
-      // All 15 fields + id = 16 values
-      expect(values).toHaveLength(16);
+      // All 16 fields + id = 17 values
+      expect(values).toHaveLength(17);
       expect(query).toContain('slug = $1');
       expect(query).toContain('agent_timeout_seconds = $14');
-      expect(query).toContain('status = $15');
-      expect(query).toContain('WHERE id = $16');
+      expect(query).toContain('session_timeout_hours = $15');
+      expect(query).toContain('status = $16');
+      expect(query).toContain('WHERE id = $17');
       expect(query).toContain('updated_at = NOW()');
     });
 
