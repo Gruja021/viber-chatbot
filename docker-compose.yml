@@ -5,6 +5,8 @@ services:
       POSTGRES_USER: viber_chatbot
       POSTGRES_PASSWORD: viber_chatbot_pass
       POSTGRES_DB: viber_chatbot
+    ports:
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -16,6 +18,8 @@ services:
   redis:
     image: redis:7-alpine
     command: redis-server --notify-keyspace-events Ex
+    ports:
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
