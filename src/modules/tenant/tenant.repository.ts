@@ -33,9 +33,9 @@ export const tenantRepository = {
 
     const { rows } = await pool.query<Tenant>(
       `INSERT INTO tenants (slug, firm_name, viber_auth_token, telegram_bot_token, database_type,
-        database_credentials, system_prompt, chatwoot_account_id,
+        database_credentials, system_prompt, openai_api_key, openai_model, chatwoot_account_id,
         chatwoot_inbox_id, chatwoot_api_token, timezone, working_hours, handover_keywords, agent_timeout_seconds, session_timeout_hours)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        RETURNING *`,
       [
         input.slug,
@@ -45,6 +45,8 @@ export const tenantRepository = {
         input.database_type || null,
         encryptedCreds,
         input.system_prompt || 'You are a helpful customer support assistant.',
+        input.openai_api_key || null,
+        input.openai_model || null,
         input.chatwoot_account_id || null,
         input.chatwoot_inbox_id || null,
         input.chatwoot_api_token || null,
@@ -90,6 +92,14 @@ export const tenantRepository = {
     if (input.system_prompt !== undefined) {
       fields.push(`system_prompt = $${idx++}`);
       values.push(input.system_prompt);
+    }
+    if (input.openai_api_key !== undefined) {
+      fields.push(`openai_api_key = $${idx++}`);
+      values.push(input.openai_api_key);
+    }
+    if (input.openai_model !== undefined) {
+      fields.push(`openai_model = $${idx++}`);
+      values.push(input.openai_model);
     }
     if (input.chatwoot_account_id !== undefined) {
       fields.push(`chatwoot_account_id = $${idx++}`);

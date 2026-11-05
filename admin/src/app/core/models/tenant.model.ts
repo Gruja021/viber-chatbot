@@ -20,6 +20,7 @@ export interface Tenant {
   system_prompt: string;
   openai_api_key: string | null;
   openai_model: string | null;
+  has_openai_api_key: boolean;
   chatwoot_account_id: number | null;
   chatwoot_inbox_id: number | null;
   chatwoot_api_token: string | null;
@@ -39,6 +40,8 @@ export interface TenantPublic {
   firm_name: string;
   database_type: DatabaseType | null;
   system_prompt: string;
+  openai_model: string | null;
+  has_openai_api_key: boolean;
   chatwoot_account_id: number | null;
   chatwoot_inbox_id: number | null;
   timezone: string;

@@ -13,6 +13,8 @@ function toPublic(tenant: Tenant): TenantPublic {
     firm_name: tenant.firm_name,
     database_type: tenant.database_type,
     system_prompt: tenant.system_prompt,
+    openai_model: tenant.openai_model,
+    has_openai_api_key: !!tenant.openai_api_key,
     chatwoot_account_id: tenant.chatwoot_account_id,
     chatwoot_inbox_id: tenant.chatwoot_inbox_id,
     timezone: tenant.timezone,

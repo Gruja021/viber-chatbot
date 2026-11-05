@@ -90,7 +90,7 @@ export const aiService = {
     userMessage: string
   ): Promise<AIResponse> {
     try {
-      const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+      const client = new OpenAI({ apiKey: tenant.openai_api_key || env.OPENAI_API_KEY });
       const connector = createConnector(tenant);
       const hasConnector = connector !== null;
       const hasChatwoot = !!(tenant.chatwoot_api_token);
@@ -99,8 +99,10 @@ export const aiService = {
       const messages = formatMessages(systemMessage, conversationHistory, userMessage);
       const tools = buildTools(hasConnector, hasChatwoot);
 
+      const model = tenant.openai_model || MODEL;
+
       let response = await client.chat.completions.create({
-        model: MODEL,
+        model,
         temperature: 0.3,
         max_tokens: 1024,
         messages,
@@ -144,7 +146,7 @@ export const aiService = {
         }
 
         response = await client.chat.completions.create({
-          model: MODEL,
+          model,
           temperature: 0.3,
           max_tokens: 1024,
           messages,

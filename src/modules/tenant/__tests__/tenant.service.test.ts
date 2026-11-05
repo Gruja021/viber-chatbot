@@ -16,6 +16,8 @@ const makeTenant = (overrides: Partial<Tenant> = {}): Tenant => ({
   database_type: null,
   database_credentials: null,
   system_prompt: 'You are helpful.',
+  openai_api_key: null,
+  openai_model: null,
   chatwoot_account_id: 1,
   chatwoot_inbox_id: 2,
   chatwoot_api_token: 'cw-secret',
@@ -163,11 +165,36 @@ describe('tenantService', () => {
       expect(result).not.toHaveProperty('telegram_bot_token');
       expect(result).not.toHaveProperty('database_credentials');
       expect(result).not.toHaveProperty('chatwoot_api_token');
+      expect(result).not.toHaveProperty('openai_api_key');
       expect(result).toHaveProperty('timezone');
       expect(result).toHaveProperty('working_hours');
       expect(result).toHaveProperty('handover_keywords');
       expect(result).toHaveProperty('agent_timeout_seconds');
       expect(result).toHaveProperty('session_timeout_hours');
+    });
+
+    it('includes openai_model in public tenant', async () => {
+      const tenant = makeTenant({ openai_model: 'gpt-4o' });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X' });
+      expect(result).toHaveProperty('openai_model', 'gpt-4o');
+    });
+
+    it('includes has_openai_api_key=true when key is set', async () => {
+      const tenant = makeTenant({ openai_api_key: 'sk-test' });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X' });
+      expect(result).toHaveProperty('has_openai_api_key', true);
+    });
+
+    it('includes has_openai_api_key=false when key is null', async () => {
+      const tenant = makeTenant({ openai_api_key: null });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X' });
+      expect(result).toHaveProperty('has_openai_api_key', false);
     });
   });
 

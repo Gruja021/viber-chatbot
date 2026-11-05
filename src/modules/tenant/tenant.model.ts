@@ -19,6 +19,8 @@ export interface Tenant {
   database_type: DatabaseType | null;
   database_credentials: Buffer | null;
   system_prompt: string;
+  openai_api_key: string | null;
+  openai_model: string | null;
   chatwoot_account_id: number | null;
   chatwoot_inbox_id: number | null;
   chatwoot_api_token: string | null;
@@ -40,6 +42,8 @@ export interface CreateTenantInput {
   database_type?: DatabaseType;
   database_credentials?: string; // plaintext JSON, will be encrypted
   system_prompt?: string;
+  openai_api_key?: string;
+  openai_model?: string;
   chatwoot_account_id?: number;
   chatwoot_inbox_id?: number;
   chatwoot_api_token?: string;
@@ -58,6 +62,8 @@ export interface UpdateTenantInput {
   database_type?: DatabaseType;
   database_credentials?: string;
   system_prompt?: string;
+  openai_api_key?: string;
+  openai_model?: string;
   chatwoot_account_id?: number;
   chatwoot_inbox_id?: number;
   chatwoot_api_token?: string;
@@ -75,6 +81,8 @@ export interface TenantPublic {
   firm_name: string;
   database_type: DatabaseType | null;
   system_prompt: string;
+  openai_model: string | null;
+  has_openai_api_key: boolean;
   chatwoot_account_id: number | null;
   chatwoot_inbox_id: number | null;
   timezone: string;

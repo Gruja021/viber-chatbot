@@ -34,6 +34,8 @@ function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     database_type: null,
     database_credentials: null,
     system_prompt: 'You are a helpful assistant for Test Firm.',
+    openai_api_key: null,
+    openai_model: null,
     chatwoot_account_id: null,
     chatwoot_inbox_id: null,
     chatwoot_api_token: null,
@@ -354,6 +356,57 @@ describe('aiService', () => {
       // Should NOT continue function call loop or call search
       expect(mockQuery).not.toHaveBeenCalled();
       expect(mockCreate).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('per-tenant OpenAI config', () => {
+    it('uses tenant openai_model when set', async () => {
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
+      });
+
+      await aiService.generateResponse(
+        makeTenant({ openai_model: 'gpt-4o' }),
+        [],
+        'test'
+      );
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'gpt-4o' })
+      );
+    });
+
+    it('falls back to default model when tenant openai_model is null', async () => {
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
+      });
+
+      await aiService.generateResponse(
+        makeTenant({ openai_model: null }),
+        [],
+        'test'
+      );
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'gpt-4o-mini' })
+      );
+    });
+
+    it('creates OpenAI client with tenant API key when set', async () => {
+      const OpenAI = require('openai');
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
+      });
+
+      await aiService.generateResponse(
+        makeTenant({ openai_api_key: 'sk-tenant-key' }),
+        [],
+        'test'
+      );
+
+      expect(OpenAI).toHaveBeenCalledWith(
+        expect.objectContaining({ apiKey: 'sk-tenant-key' })
+      );
     });
   });
 

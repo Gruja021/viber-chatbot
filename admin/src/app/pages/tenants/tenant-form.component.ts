@@ -117,7 +117,10 @@ const DAYS: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>OpenAI API Key</mat-label>
                 <input matInput formControlName="openai_api_key" type="password"
-                       placeholder="sk-...">
+                       [placeholder]="hasExistingApiKey() ? 'API key is configured (leave empty to keep)' : 'sk-...'">
+                @if (hasExistingApiKey() && !form.get('openai_api_key')?.value) {
+                  <mat-hint>A key is already configured. Enter a new value to replace it.</mat-hint>
+                }
               </mat-form-field>
 
               <mat-form-field appearance="outline" class="full-width">
@@ -306,6 +309,7 @@ export class TenantFormComponent implements OnInit {
   isEdit = signal(false);
   formLoading = signal(false);
   saving = signal(false);
+  hasExistingApiKey = signal(false);
   tenantId = '';
   handoverKeywords: string[] = [];
   separatorKeyCodes = [ENTER, COMMA];
@@ -448,6 +452,7 @@ export class TenantFormComponent implements OnInit {
     this.formLoading.set(true);
     this.tenantService.getTenant(id).subscribe({
       next: (t) => {
+        this.hasExistingApiKey.set(!!t.has_openai_api_key);
         this.form.patchValue({
           slug: t.slug,
           firm_name: t.firm_name,
@@ -455,7 +460,7 @@ export class TenantFormComponent implements OnInit {
           viber_auth_token: t.viber_auth_token || '',
           telegram_bot_token: t.telegram_bot_token || '',
           system_prompt: t.system_prompt || '',
-          openai_api_key: t.openai_api_key || '',
+          openai_api_key: '',
           openai_model: t.openai_model || '',
           database_type: t.database_type,
           database_credentials: t.database_credentials || '',

@@ -270,12 +270,21 @@ describe('TenantFormComponent', () => {
       expect(component.form.get('session_timeout_hours')?.value).toBe(1);
     });
 
-    it('should load openai_api_key from tenant', () => {
+    it('should set hasExistingApiKey when tenant has API key', () => {
       fixture.detectChanges();
       httpTesting.expectOne('/api/tenants/tenant-1').flush(
-        makeTenant({ openai_api_key: 'sk-loaded-key' })
+        makeTenant({ has_openai_api_key: true })
       );
-      expect(component.form.get('openai_api_key')?.value).toBe('sk-loaded-key');
+      expect(component.hasExistingApiKey()).toBeTrue();
+      expect(component.form.get('openai_api_key')?.value).toBe('');
+    });
+
+    it('should not set hasExistingApiKey when tenant has no API key', () => {
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(
+        makeTenant({ has_openai_api_key: false })
+      );
+      expect(component.hasExistingApiKey()).toBeFalse();
     });
 
     it('should load openai_model from tenant', () => {

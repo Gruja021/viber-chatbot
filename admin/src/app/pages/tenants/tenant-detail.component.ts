@@ -122,15 +122,26 @@ import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
           </mat-card>
         </div>
 
-        <!-- System Prompt -->
-        @if (tenant()!.system_prompt) {
-          <mat-card>
-            <mat-card-header><mat-card-title>System Prompt</mat-card-title></mat-card-header>
-            <mat-card-content>
+        <!-- AI Configuration -->
+        <mat-card>
+          <mat-card-header><mat-card-title>AI Configuration</mat-card-title></mat-card-header>
+          <mat-card-content>
+            <mat-list>
+              <mat-list-item>
+                <span matListItemTitle>Model</span>
+                <span matListItemLine>{{ tenant()!.openai_model || 'Default (gpt-4o-mini)' }}</span>
+              </mat-list-item>
+              <mat-list-item>
+                <span matListItemTitle>API Key</span>
+                <span matListItemLine>{{ tenant()!.has_openai_api_key ? 'Configured (tenant-specific)' : 'Using global key' }}</span>
+              </mat-list-item>
+            </mat-list>
+            @if (tenant()!.system_prompt) {
+              <h4 style="margin: 16px 0 8px;">System Prompt</h4>
               <pre class="prompt-text">{{ tenant()!.system_prompt }}</pre>
-            </mat-card-content>
-          </mat-card>
-        }
+            }
+          </mat-card-content>
+        </mat-card>
 
         <!-- CRM -->
         @if (tenant()!.chatwoot_account_id) {

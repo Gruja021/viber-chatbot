@@ -255,6 +255,47 @@ describe('TenantDetailComponent', () => {
     expect(compiled.textContent).toContain('AI-First');
   });
 
+  it('should display tenant openai_model in AI Configuration', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant({ openai_model: 'gpt-4o' }));
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('gpt-4o');
+    expect(compiled.textContent).toContain('Model');
+  });
+
+  it('should display default model text when openai_model is null', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant({ openai_model: null }));
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Default (gpt-4o-mini)');
+  });
+
+  it('should display API key status when has_openai_api_key is true', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant({ has_openai_api_key: true }));
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Configured (tenant-specific)');
+  });
+
+  it('should display global key status when has_openai_api_key is false', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant({ has_openai_api_key: false }));
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Using global key');
+  });
+
   it('should display Human-First label when agent_timeout_seconds > 0', () => {
     setup();
     fixture.detectChanges();

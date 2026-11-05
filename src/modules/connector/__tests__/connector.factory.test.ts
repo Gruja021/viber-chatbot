@@ -19,6 +19,8 @@ function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     database_type: null,
     database_credentials: null,
     system_prompt: '',
+    openai_api_key: null,
+    openai_model: null,
     chatwoot_account_id: null,
     chatwoot_inbox_id: null,
     chatwoot_api_token: null,

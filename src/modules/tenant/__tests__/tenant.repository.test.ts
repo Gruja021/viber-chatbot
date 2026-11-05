@@ -100,6 +100,24 @@ describe('tenantRepository', () => {
       );
     });
 
+    it('creates tenant with openai_api_key and openai_model', async () => {
+      const input = {
+        slug: 'ai-tenant',
+        firm_name: 'AI Firm',
+        openai_api_key: 'sk-test-key',
+        openai_model: 'gpt-4o',
+      };
+      const created = { id: 'uuid-ai', ...input };
+      mockQuery.mockResolvedValue({ rows: [created] });
+
+      const result = await tenantRepository.create(input);
+      expect(result).toEqual(created);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO tenants'),
+        expect.arrayContaining(['sk-test-key', 'gpt-4o'])
+      );
+    });
+
     it('creates tenant with explicit session_timeout_hours', async () => {
       const input = {
         slug: 'new-tenant',
@@ -233,6 +251,24 @@ describe('tenantRepository', () => {
       );
     });
 
+    it('updates openai_api_key field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { openai_api_key: 'sk-new-key' });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('openai_api_key = $1'),
+        ['sk-new-key', 'uuid-1']
+      );
+    });
+
+    it('updates openai_model field', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+      await tenantRepository.update('uuid-1', { openai_model: 'gpt-4o' });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('openai_model = $1'),
+        ['gpt-4o', 'uuid-1']
+      );
+    });
+
     it('updates chatwoot_account_id field', async () => {
       mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
       await tenantRepository.update('uuid-1', { chatwoot_account_id: 10 });
@@ -328,6 +364,8 @@ describe('tenantRepository', () => {
         database_type: 'postgresql',
         database_credentials: '{}',
         system_prompt: 'prompt',
+        openai_api_key: 'sk-key',
+        openai_model: 'gpt-4o',
         chatwoot_account_id: 10,
         chatwoot_inbox_id: 20,
         chatwoot_api_token: 'cw',
@@ -340,13 +378,15 @@ describe('tenantRepository', () => {
       });
 
       const [query, values] = mockQuery.mock.calls[0];
-      // All 16 fields + id = 17 values
-      expect(values).toHaveLength(17);
+      // All 18 fields + id = 19 values
+      expect(values).toHaveLength(19);
       expect(query).toContain('slug = $1');
-      expect(query).toContain('agent_timeout_seconds = $14');
-      expect(query).toContain('session_timeout_hours = $15');
-      expect(query).toContain('status = $16');
-      expect(query).toContain('WHERE id = $17');
+      expect(query).toContain('openai_api_key = $8');
+      expect(query).toContain('openai_model = $9');
+      expect(query).toContain('agent_timeout_seconds = $16');
+      expect(query).toContain('session_timeout_hours = $17');
+      expect(query).toContain('status = $18');
+      expect(query).toContain('WHERE id = $19');
       expect(query).toContain('updated_at = NOW()');
     });
 

@@ -17,6 +17,7 @@ export function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     system_prompt: 'You are a helpful assistant.',
     openai_api_key: 'sk-test-key',
     openai_model: 'gpt-4o',
+    has_openai_api_key: true,
     chatwoot_account_id: 1,
     chatwoot_inbox_id: 10,
     chatwoot_api_token: 'cw-token',
