@@ -93,6 +93,7 @@ export const aiService = {
       const client = new OpenAI({ apiKey: tenant.openai_api_key || env.OPENAI_API_KEY });
       const connector = createConnector(tenant);
       const hasConnector = connector !== null;
+      logger.info({ tenantId: tenant.id, hasConnector, hasDatabaseType: !!tenant.database_type, hasCreds: !!tenant.database_credentials }, 'AI connector status');
       const hasChatwoot = !!(tenant.chatwoot_api_token);
 
       const systemMessage = buildSystemMessage(tenant, hasConnector);
@@ -108,6 +109,8 @@ export const aiService = {
         messages,
         tools,
       });
+
+      logger.info({ tenantId: tenant.id, finishReason: response.choices[0]?.finish_reason, hasToolCalls: !!response.choices[0]?.message?.tool_calls, content: response.choices[0]?.message?.content?.substring(0, 100) }, 'AI initial response');
 
       let functionCallCount = 0;
 
@@ -133,7 +136,9 @@ export const aiService = {
 
           if (toolCall.function.name === 'search_database' && connector) {
             const args = JSON.parse(toolCall.function.arguments);
+            logger.info({ searchTerm: args.search_term, tenantId: tenant.id }, 'AI calling search_database');
             const result = await connector.query(args.search_term);
+            logger.info({ searchTerm: args.search_term, totalResults: result.total_results, success: result.success, tenantId: tenant.id }, 'search_database result');
 
             messages.push({
               role: 'tool',

@@ -143,13 +143,17 @@ const DAYS: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday
                   <mat-option value="woocommerce">WooCommerce</mat-option>
                   <mat-option value="postgresql">PostgreSQL</mat-option>
                   <mat-option value="mysql">MySQL</mat-option>
+                  <mat-option value="rest_api">REST API</mat-option>
                 </mat-select>
               </mat-form-field>
 
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>Database Credentials (JSON)</mat-label>
                 <textarea matInput formControlName="database_credentials" rows="4"
-                          placeholder='{"spreadsheet_id": "...", "range": "Sheet1!A:Z"}'></textarea>
+                          [placeholder]="hasExistingDbCredentials() ? 'Credentials are configured (leave empty to keep)' : 'Enter JSON credentials'"></textarea>
+                @if (hasExistingDbCredentials() && !form.get('database_credentials')?.value) {
+                  <mat-hint>Credentials are already configured. Enter new JSON to replace them.</mat-hint>
+                }
               </mat-form-field>
             </mat-card-content>
           </mat-card>
@@ -310,6 +314,7 @@ export class TenantFormComponent implements OnInit {
   formLoading = signal(false);
   saving = signal(false);
   hasExistingApiKey = signal(false);
+  hasExistingDbCredentials = signal(false);
   tenantId = '';
   handoverKeywords: string[] = [];
   separatorKeyCodes = [ENTER, COMMA];
@@ -453,6 +458,7 @@ export class TenantFormComponent implements OnInit {
     this.tenantService.getTenant(id).subscribe({
       next: (t) => {
         this.hasExistingApiKey.set(!!t.has_openai_api_key);
+        this.hasExistingDbCredentials.set(!!t.has_database_credentials);
         this.form.patchValue({
           slug: t.slug,
           firm_name: t.firm_name,
@@ -463,7 +469,7 @@ export class TenantFormComponent implements OnInit {
           openai_api_key: '',
           openai_model: t.openai_model || '',
           database_type: t.database_type,
-          database_credentials: t.database_credentials || '',
+          database_credentials: '',
           chatwoot_account_id: t.chatwoot_account_id,
           chatwoot_inbox_id: t.chatwoot_inbox_id,
           chatwoot_api_token: t.chatwoot_api_token || '',

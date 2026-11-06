@@ -65,7 +65,7 @@ describe('tenant.routes integration', () => {
 
   describe('GET /api/tenants/:id', () => {
     it('returns 404 when tenant not found', async () => {
-      mockService.getById.mockResolvedValue(null);
+      mockService.getPublicById.mockResolvedValue(null);
 
       const res = await request(app)
         .get('/api/tenants/nonexistent')
@@ -75,7 +75,7 @@ describe('tenant.routes integration', () => {
     });
 
     it('returns 200 with tenant', async () => {
-      mockService.getById.mockResolvedValue(mockPublicTenant as any);
+      mockService.getPublicById.mockResolvedValue(mockPublicTenant as any);
 
       const res = await request(app)
         .get('/api/tenants/uuid-1')

@@ -2,12 +2,14 @@ import { createConnector } from '../connector.factory';
 import { GoogleSheetsConnector } from '../GoogleSheetsConnector';
 import { WooCommerceConnector } from '../WooCommerceConnector';
 import { SQLConnector } from '../SQLConnector';
+import { RestAPIConnector } from '../RestAPIConnector';
 import { encrypt } from '../../../utils/crypto';
 import { Tenant } from '../../tenant/tenant.model';
 
 jest.mock('../GoogleSheetsConnector');
 jest.mock('../WooCommerceConnector');
 jest.mock('../SQLConnector');
+jest.mock('../RestAPIConnector');
 
 function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
   return {
@@ -89,6 +91,17 @@ describe('createConnector', () => {
 
     const connector = createConnector(tenant);
     expect(connector).toBeInstanceOf(SQLConnector);
+  });
+
+  it('creates RestAPIConnector for rest_api type', () => {
+    const creds = { base_url: 'https://api.example.com', search_endpoint: '/api/offers', search_param: 'search' };
+    const tenant = makeTenant({
+      database_type: 'rest_api',
+      database_credentials: encrypt(JSON.stringify(creds)),
+    });
+
+    const connector = createConnector(tenant);
+    expect(connector).toBeInstanceOf(RestAPIConnector);
   });
 
   it('returns null for invalid encrypted data', () => {

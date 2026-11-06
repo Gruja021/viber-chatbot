@@ -12,6 +12,7 @@ function toPublic(tenant: Tenant): TenantPublic {
     slug: tenant.slug,
     firm_name: tenant.firm_name,
     database_type: tenant.database_type,
+    has_database_credentials: !!tenant.database_credentials,
     system_prompt: tenant.system_prompt,
     openai_model: tenant.openai_model,
     has_openai_api_key: !!tenant.openai_api_key,
@@ -40,6 +41,11 @@ export const tenantService = {
   async getAll(): Promise<TenantPublic[]> {
     const tenants = await tenantRepository.findAll();
     return tenants.map(toPublic);
+  },
+
+  async getPublicById(id: string): Promise<TenantPublic | null> {
+    const tenant = await this.getById(id);
+    return tenant ? toPublic(tenant) : null;
   },
 
   async getById(id: string): Promise<Tenant | null> {

@@ -1,10 +1,11 @@
 import { logger } from '../../config/logger';
 import { decrypt } from '../../utils/crypto';
 import { Tenant } from '../tenant/tenant.model';
-import { IDataConnector, GoogleSheetsCredentials, WooCommerceCredentials, SQLCredentials } from './connector.types';
+import { IDataConnector, GoogleSheetsCredentials, WooCommerceCredentials, SQLCredentials, RestAPICredentials } from './connector.types';
 import { GoogleSheetsConnector } from './GoogleSheetsConnector';
 import { WooCommerceConnector } from './WooCommerceConnector';
 import { SQLConnector } from './SQLConnector';
+import { RestAPIConnector } from './RestAPIConnector';
 
 export function createConnector(tenant: Tenant): IDataConnector | null {
   if (!tenant.database_type || !tenant.database_credentials) {
@@ -24,6 +25,8 @@ export function createConnector(tenant: Tenant): IDataConnector | null {
         return new SQLConnector(credentials as SQLCredentials, 'postgresql');
       case 'mysql':
         return new SQLConnector(credentials as SQLCredentials, 'mysql');
+      case 'rest_api':
+        return new RestAPIConnector(credentials as RestAPICredentials);
       default:
         logger.warn({ databaseType: tenant.database_type }, 'Unknown database type');
         return null;

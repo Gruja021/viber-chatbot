@@ -31,4 +31,13 @@ export interface SQLCredentials {
   password: string;
   table_name: string;
   search_columns: string[];
+  ssl?: boolean;
+}
+
+export interface RestAPICredentials {
+  base_url: string;
+  search_endpoint: string;
+  search_param: string;
+  headers?: Record<string, string>;
+  result_path?: string;
 }

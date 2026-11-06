@@ -39,7 +39,7 @@ router.get('/:id/health', async (req: Request, res: Response, next: NextFunction
 
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const tenant = await tenantService.getById(req.params.id as string);
+    const tenant = await tenantService.getPublicById(req.params.id as string);
     if (!tenant) {
       res.status(404).json({ error: 'Tenant not found' });
       return;
@@ -52,12 +52,16 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { slug, firm_name, viber_auth_token } = req.body;
-    if (!slug || !firm_name || !viber_auth_token) {
-      res.status(400).json({ error: 'slug, firm_name, and viber_auth_token are required' });
+    const body = { ...req.body };
+    const { slug, firm_name } = body;
+    if (!slug || !firm_name) {
+      res.status(400).json({ error: 'slug and firm_name are required' });
       return;
     }
-    const tenant = await tenantService.create(req.body);
+    if (body.database_credentials && typeof body.database_credentials === 'object') {
+      body.database_credentials = JSON.stringify(body.database_credentials);
+    }
+    const tenant = await tenantService.create(body);
     res.status(201).json(tenant);
   } catch (err: any) {
     if (err.code === '23505') {
@@ -70,7 +74,11 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 
 router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const tenant = await tenantService.update(req.params.id as string, req.body);
+    const body = { ...req.body };
+    if (body.database_credentials && typeof body.database_credentials === 'object') {
+      body.database_credentials = JSON.stringify(body.database_credentials);
+    }
+    const tenant = await tenantService.update(req.params.id as string, body);
     if (!tenant) {
       res.status(404).json({ error: 'Tenant not found' });
       return;

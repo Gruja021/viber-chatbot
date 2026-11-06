@@ -1,5 +1,5 @@
 export type TenantStatus = 'active' | 'inactive' | 'suspended';
-export type DatabaseType = 'google_sheets' | 'woocommerce' | 'postgresql' | 'mysql';
+export type DatabaseType = 'google_sheets' | 'woocommerce' | 'postgresql' | 'mysql' | 'rest_api';
 
 export type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 
@@ -80,6 +80,7 @@ export interface TenantPublic {
   slug: string;
   firm_name: string;
   database_type: DatabaseType | null;
+  has_database_credentials: boolean;
   system_prompt: string;
   openai_model: string | null;
   has_openai_api_key: boolean;

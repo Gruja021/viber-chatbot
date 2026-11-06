@@ -1,7 +1,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TYPE tenant_status AS ENUM ('active', 'inactive', 'suspended');
-CREATE TYPE database_type AS ENUM ('google_sheets', 'woocommerce', 'postgresql', 'mysql');
+CREATE TYPE database_type AS ENUM ('google_sheets', 'woocommerce', 'postgresql', 'mysql', 'rest_api');
 
 CREATE TABLE tenants (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

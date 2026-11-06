@@ -13,7 +13,7 @@ export function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     viber_auth_token: 'viber-token-123',
     telegram_bot_token: 'telegram-token-456',
     database_type: 'google_sheets',
-    database_credentials: '{"spreadsheet_id":"abc"}',
+    has_database_credentials: true,
     system_prompt: 'You are a helpful assistant.',
     openai_api_key: 'sk-test-key',
     openai_model: 'gpt-4o',
