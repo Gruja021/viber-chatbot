@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: viber_chatbot
       POSTGRES_PASSWORD: viber_chatbot_pass
@@ -44,13 +44,45 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
       WEBHOOK_BASE_URL: ${WEBHOOK_BASE_URL:-http://localhost:3000}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      CHATWOOT_BASE_URL: ${CHATWOOT_BASE_URL:-}
+      CHATWOOT_BASE_URL: http://chatwoot-rails:3000
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 15s
+
+  chatwoot-rails:
+    image: chatwoot/chatwoot:v4.0.2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3001:3000"
+    environment:
+      RAILS_ENV: production
+      SECRET_KEY_BASE: replace_with_lengthy_secure_hex_string_at_least_64_chars_long_1234567890abcdef
+      FRONTEND_URL: http://localhost:3001
+      DATABASE_URL: postgresql://viber_chatbot:viber_chatbot_pass@postgres:5432/chatwoot
+      REDIS_URL: redis://redis:6379
+      RAILS_LOG_TO_STDOUT: "true"
+    entrypoint: /bin/sh
+    command: >
+      -c "bundle exec rails db:chatwoot_prepare && bundle exec rails s -b 0.0.0.0 -p 3000"
+
+  chatwoot-sidekiq:
+    image: chatwoot/chatwoot:v4.0.2
+    depends_on:
+      - chatwoot-rails
+    environment:
+      RAILS_ENV: production
+      SECRET_KEY_BASE: replace_with_lengthy_secure_hex_string_at_least_64_chars_long_1234567890abcdef
+      FRONTEND_URL: http://localhost:3001
+      DATABASE_URL: postgresql://viber_chatbot:viber_chatbot_pass@postgres:5432/chatwoot
+      REDIS_URL: redis://redis:6379
+    command: bundle exec sidekiq -C config/sidekiq.yml
 
 volumes:
   pgdata:

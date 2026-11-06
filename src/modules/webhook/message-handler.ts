@@ -324,18 +324,23 @@ async function ensureChatwootConversation(
     return conversation.chatwoot_conversation_id;
   }
 
-  const chatwootConvId = await chatwootService.createConversation({
-    chatwootApiToken: tenant.chatwoot_api_token,
-    chatwootAccountId: tenant.chatwoot_account_id!,
-    inboxId: tenant.chatwoot_inbox_id!,
-    contactName: sender.userName,
-    identifier: `${sender.platform}:${sender.userId}`,
-  });
+  try {
+    const chatwootConvId = await chatwootService.createConversation({
+      chatwootApiToken: tenant.chatwoot_api_token,
+      chatwootAccountId: tenant.chatwoot_account_id!,
+      inboxId: tenant.chatwoot_inbox_id!,
+      contactName: sender.userName,
+      identifier: `${sender.platform}:${sender.userId}`,
+    });
 
-  if (chatwootConvId) {
-    await conversationService.setChatwootConversationId(conversation.id, chatwootConvId);
-    conversation.chatwoot_conversation_id = chatwootConvId;
+    if (chatwootConvId) {
+      await conversationService.setChatwootConversationId(conversation.id, chatwootConvId);
+      conversation.chatwoot_conversation_id = chatwootConvId;
+    }
+
+    return chatwootConvId;
+  } catch (err) {
+    logger.error({ err, tenantId: tenant.id }, 'Failed to create Chatwoot conversation, continuing without CRM');
+    return null;
   }
-
-  return chatwootConvId;
 }

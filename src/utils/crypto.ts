@@ -24,6 +24,9 @@ export function encrypt(plaintext: string): Buffer {
 }
 
 export function decrypt(data: Buffer): string {
+  if (!Buffer.isBuffer(data)) {
+    data = Buffer.from((data as any).data || data);
+  }
   const iv = data.subarray(0, IV_LENGTH);
   const authTag = data.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
   const ciphertext = data.subarray(IV_LENGTH + AUTH_TAG_LENGTH);

@@ -45,9 +45,13 @@ export class SQLConnector implements IDataConnector {
     }
   }
 
+  private getSslConfig(): false | { rejectUnauthorized: boolean } {
+    return this.credentials.ssl === false ? false : { rejectUnauthorized: false };
+  }
+
   private async queryPostgres(searchTerm: string): Promise<ConnectorQueryResult> {
     const { host, port, database, user, password, table_name, search_columns } = this.credentials;
-    const pool = new PgPool({ host, port, database, user, password, max: 1 });
+    const pool = new PgPool({ host, port, database, user, password, max: 1, ssl: this.getSslConfig() });
 
     try {
       const conditions = search_columns.map((col, i) => `"${col}" ILIKE $1`).join(' OR ');
@@ -108,6 +112,7 @@ export class SQLConnector implements IDataConnector {
           user: this.credentials.user,
           password: this.credentials.password,
           max: 1,
+          ssl: this.getSslConfig(),
         });
         try {
           await pool.query('SELECT 1');

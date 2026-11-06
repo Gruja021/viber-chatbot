@@ -20,7 +20,7 @@ export async function handleTelegramWebhook(req: Request, res: Response) {
   const tenant = req.tenant!;
   const update = req.body as TelegramUpdate;
 
-  logger.debug({ updateId: update.update_id, tenantSlug: tenant.slug }, 'Telegram update received');
+  logger.info({ updateId: update.update_id, tenantSlug: tenant.slug }, 'Telegram update received');
 
   // Acknowledge immediately
   res.status(200).json({ ok: true });
