@@ -131,30 +131,18 @@ const DAYS: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday
             </mat-card-content>
           </mat-card>
 
-          <!-- Database -->
+          <!-- Data Sources -->
           <mat-card>
-            <mat-card-header><mat-card-title>Data Source</mat-card-title></mat-card-header>
+            <mat-card-header><mat-card-title>Data Sources</mat-card-title></mat-card-header>
             <mat-card-content>
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Database Type</mat-label>
-                <mat-select formControlName="database_type">
-                  <mat-option [value]="null">None</mat-option>
-                  <mat-option value="google_sheets">Google Sheets</mat-option>
-                  <mat-option value="woocommerce">WooCommerce</mat-option>
-                  <mat-option value="postgresql">PostgreSQL</mat-option>
-                  <mat-option value="mysql">MySQL</mat-option>
-                  <mat-option value="rest_api">REST API</mat-option>
-                </mat-select>
-              </mat-form-field>
-
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Database Credentials (JSON)</mat-label>
-                <textarea matInput formControlName="database_credentials" rows="4"
-                          [placeholder]="hasExistingDbCredentials() ? 'Credentials are configured (leave empty to keep)' : 'Enter JSON credentials'"></textarea>
-                @if (hasExistingDbCredentials() && !form.get('database_credentials')?.value) {
-                  <mat-hint>Credentials are already configured. Enter new JSON to replace them.</mat-hint>
-                }
-              </mat-form-field>
+              @if (isEdit()) {
+                <p>Data sources (connectors) are managed separately.</p>
+                <a mat-raised-button [routerLink]="['/tenants', tenantId, 'connectors']">
+                  <mat-icon>storage</mat-icon> Manage Connectors
+                </a>
+              } @else {
+                <p class="hint">Data sources can be added after the tenant is created.</p>
+              }
             </mat-card-content>
           </mat-card>
 
@@ -314,7 +302,6 @@ export class TenantFormComponent implements OnInit {
   formLoading = signal(false);
   saving = signal(false);
   hasExistingApiKey = signal(false);
-  hasExistingDbCredentials = signal(false);
   tenantId = '';
   handoverKeywords: string[] = [];
   separatorKeyCodes = [ENTER, COMMA];
@@ -329,8 +316,6 @@ export class TenantFormComponent implements OnInit {
     system_prompt: [''],
     openai_api_key: [''],
     openai_model: [''],
-    database_type: [null],
-    database_credentials: [''],
     chatwoot_account_id: [null],
     chatwoot_inbox_id: [null],
     chatwoot_api_token: [''],
@@ -408,8 +393,6 @@ export class TenantFormComponent implements OnInit {
       system_prompt: raw.system_prompt || undefined,
       openai_api_key: raw.openai_api_key || undefined,
       openai_model: raw.openai_model || undefined,
-      database_type: raw.database_type || undefined,
-      database_credentials: raw.database_credentials || undefined,
       viber_auth_token: raw.viber_auth_token || undefined,
       telegram_bot_token: raw.telegram_bot_token || undefined,
       chatwoot_account_id: raw.chatwoot_account_id || undefined,
@@ -458,7 +441,6 @@ export class TenantFormComponent implements OnInit {
     this.tenantService.getTenant(id).subscribe({
       next: (t) => {
         this.hasExistingApiKey.set(!!t.has_openai_api_key);
-        this.hasExistingDbCredentials.set(!!t.has_database_credentials);
         this.form.patchValue({
           slug: t.slug,
           firm_name: t.firm_name,
@@ -468,8 +450,6 @@ export class TenantFormComponent implements OnInit {
           system_prompt: t.system_prompt || '',
           openai_api_key: '',
           openai_model: t.openai_model || '',
-          database_type: t.database_type,
-          database_credentials: '',
           chatwoot_account_id: t.chatwoot_account_id,
           chatwoot_inbox_id: t.chatwoot_inbox_id,
           chatwoot_api_token: t.chatwoot_api_token || '',

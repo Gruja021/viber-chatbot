@@ -307,4 +307,187 @@ describe('TenantDetailComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.textContent).toContain('Human-First');
   });
+
+  // Platform Actions tests
+  it('should show Viber section when viber_auth_token is set', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ has_viber_token: true, has_telegram_token: false })
+    );
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Platform Actions');
+    expect(compiled.textContent).toContain('Viber');
+  });
+
+  it('should show Telegram section when telegram_bot_token is set', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ has_viber_token: false, has_telegram_token: true })
+    );
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Platform Actions');
+    expect(compiled.textContent).toContain('Telegram');
+  });
+
+  it('should not show Platform Actions when no platform tokens', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ has_viber_token: false, has_telegram_token: false })
+    );
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).not.toContain('Platform Actions');
+  });
+
+  it('should call registerViberWebhook and show snackbar', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+    component.registerViberWebhook();
+    expect(component.webhookLoading()).toBeTrue();
+
+    httpTesting.expectOne('/api/viber/register-webhook').flush({
+      message: 'Webhook registered',
+      webhook_url: 'https://example.com/api/viber/webhook/test-company',
+    });
+
+    expect(component.webhookLoading()).toBeFalse();
+    expect(snackBar.open).toHaveBeenCalledWith(
+      jasmine.stringContaining('Webhook registered'),
+      'OK',
+      jasmine.any(Object)
+    );
+  });
+
+  it('should show error snackbar on Viber webhook failure', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+    component.registerViberWebhook();
+    httpTesting.expectOne('/api/viber/register-webhook').flush('', { status: 500, statusText: 'Error' });
+
+    expect(component.webhookLoading()).toBeFalse();
+    expect(snackBar.open).toHaveBeenCalledWith('Failed to register Viber webhook', 'OK', jasmine.any(Object));
+  });
+
+  it('should call registerTelegramWebhook and show snackbar', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+    component.registerTelegramWebhook();
+    expect(component.webhookLoading()).toBeTrue();
+
+    httpTesting.expectOne('/api/telegram/register-webhook').flush({
+      message: 'Telegram webhook registered',
+      webhook_url: 'https://example.com/api/telegram/webhook/test-company',
+    });
+
+    expect(component.webhookLoading()).toBeFalse();
+    expect(snackBar.open).toHaveBeenCalledWith(
+      jasmine.stringContaining('Webhook registered'),
+      'OK',
+      jasmine.any(Object)
+    );
+  });
+
+  it('should show error snackbar on Telegram webhook failure', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+    component.registerTelegramWebhook();
+    httpTesting.expectOne('/api/telegram/register-webhook').flush('', { status: 500, statusText: 'Error' });
+
+    expect(component.webhookLoading()).toBeFalse();
+    expect(snackBar.open).toHaveBeenCalledWith('Failed to register Telegram webhook', 'OK', jasmine.any(Object));
+  });
+
+  it('should call sendViberTestMessage with prompted user ID', () => {
+    setup();
+    spyOn(window, 'prompt').and.returnValue('viber-user-123');
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+    component.sendViberTest();
+    expect(component.testMessageLoading()).toBeTrue();
+
+    const req = httpTesting.expectOne('/api/viber/test-message');
+    expect(req.request.body).toEqual({ tenant_id: 'tenant-1', viber_user_id: 'viber-user-123' });
+    req.flush({ message: 'Test message sent' });
+
+    expect(component.testMessageLoading()).toBeFalse();
+    expect(snackBar.open).toHaveBeenCalledWith('Test message sent', 'OK', jasmine.any(Object));
+  });
+
+  it('should not send Viber test when prompt is cancelled', () => {
+    setup();
+    spyOn(window, 'prompt').and.returnValue(null);
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+    component.sendViberTest();
+    expect(component.testMessageLoading()).toBeFalse();
+  });
+
+  it('should show error on Viber test message failure', () => {
+    setup();
+    spyOn(window, 'prompt').and.returnValue('viber-user-123');
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+    component.sendViberTest();
+    httpTesting.expectOne('/api/viber/test-message').flush('', { status: 500, statusText: 'Error' });
+
+    expect(component.testMessageLoading()).toBeFalse();
+    expect(snackBar.open).toHaveBeenCalledWith('Failed to send test message', 'OK', jasmine.any(Object));
+  });
+
+  it('should call sendTelegramTestMessage with prompted chat ID', () => {
+    setup();
+    spyOn(window, 'prompt').and.returnValue('98765');
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+    component.sendTelegramTest();
+    expect(component.testMessageLoading()).toBeTrue();
+
+    const req = httpTesting.expectOne('/api/telegram/test-message');
+    expect(req.request.body).toEqual({ tenant_id: 'tenant-1', chat_id: '98765' });
+    req.flush({ message: 'Test message sent' });
+
+    expect(component.testMessageLoading()).toBeFalse();
+    expect(snackBar.open).toHaveBeenCalledWith('Test message sent', 'OK', jasmine.any(Object));
+  });
+
+  it('should not send Telegram test when prompt is cancelled', () => {
+    setup();
+    spyOn(window, 'prompt').and.returnValue(null);
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+    component.sendTelegramTest();
+    expect(component.testMessageLoading()).toBeFalse();
+  });
+
+  it('should show Manage Connectors link in Data Sources section', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Data Sources');
+    expect(compiled.textContent).toContain('Manage Connectors');
+  });
 });

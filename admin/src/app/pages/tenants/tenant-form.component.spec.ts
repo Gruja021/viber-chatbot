@@ -475,4 +475,27 @@ describe('TenantFormComponent', () => {
       expect(component.handoverKeywords).toEqual(['help', 'support']);
     });
   });
+
+  // ---- Data Sources card ----
+  describe('Data Sources card', () => {
+    it('should show "added after creation" hint in create mode', () => {
+      setup(null);
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.textContent).toContain('Data Sources');
+      expect(compiled.textContent).toContain('added after the tenant is created');
+    });
+
+    it('should show Manage Connectors link in edit mode', () => {
+      setup('tenant-1');
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.textContent).toContain('Data Sources');
+      expect(compiled.textContent).toContain('Manage Connectors');
+    });
+  });
 });

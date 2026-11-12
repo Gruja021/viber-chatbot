@@ -161,4 +161,46 @@ describe('TenantService', () => {
     expect(req.request.url).toBe('/api/tenants/id-3/health');
     req.flush(makeTenantHealthResponse());
   });
+
+  // registerViberWebhook
+  it('should POST to register Viber webhook', () => {
+    const mockRes = { message: 'Webhook registered', webhook_url: 'https://example.com/api/viber/webhook/test' };
+    service.registerViberWebhook('tenant-1').subscribe((result) => {
+      expect(result.webhook_url).toContain('viber');
+    });
+    const req = httpTesting.expectOne('/api/viber/register-webhook');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ tenant_id: 'tenant-1' });
+    req.flush(mockRes);
+  });
+
+  // registerTelegramWebhook
+  it('should POST to register Telegram webhook', () => {
+    const mockRes = { message: 'Telegram webhook registered', webhook_url: 'https://example.com/api/telegram/webhook/test' };
+    service.registerTelegramWebhook('tenant-1').subscribe((result) => {
+      expect(result.webhook_url).toContain('telegram');
+    });
+    const req = httpTesting.expectOne('/api/telegram/register-webhook');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ tenant_id: 'tenant-1' });
+    req.flush(mockRes);
+  });
+
+  // sendViberTestMessage
+  it('should POST to send Viber test message', () => {
+    service.sendViberTestMessage('tenant-1', 'user-abc').subscribe();
+    const req = httpTesting.expectOne('/api/viber/test-message');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ tenant_id: 'tenant-1', viber_user_id: 'user-abc' });
+    req.flush({ message: 'Test message sent' });
+  });
+
+  // sendTelegramTestMessage
+  it('should POST to send Telegram test message', () => {
+    service.sendTelegramTestMessage('tenant-1', '12345').subscribe();
+    const req = httpTesting.expectOne('/api/telegram/test-message');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ tenant_id: 'tenant-1', chat_id: '12345' });
+    req.flush({ message: 'Test message sent' });
+  });
 });

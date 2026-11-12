@@ -11,6 +11,8 @@ function toPublic(tenant: Tenant): TenantPublic {
     id: tenant.id,
     slug: tenant.slug,
     firm_name: tenant.firm_name,
+    has_viber_token: !!tenant.viber_auth_token,
+    has_telegram_token: !!tenant.telegram_bot_token,
     database_type: tenant.database_type,
     has_database_credentials: !!tenant.database_credentials,
     system_prompt: tenant.system_prompt,

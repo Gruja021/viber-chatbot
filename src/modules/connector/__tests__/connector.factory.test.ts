@@ -1,10 +1,11 @@
-import { createConnector } from '../connector.factory';
+import { createConnector, createConnectorFromConfig, createConnectorsForTenant } from '../connector.factory';
 import { GoogleSheetsConnector } from '../GoogleSheetsConnector';
 import { WooCommerceConnector } from '../WooCommerceConnector';
 import { SQLConnector } from '../SQLConnector';
 import { RestAPIConnector } from '../RestAPIConnector';
 import { encrypt } from '../../../utils/crypto';
 import { Tenant } from '../../tenant/tenant.model';
+import { TenantConnector } from '../connector.types';
 
 jest.mock('../GoogleSheetsConnector');
 jest.mock('../WooCommerceConnector');
@@ -111,5 +112,79 @@ describe('createConnector', () => {
     });
 
     expect(createConnector(tenant)).toBeNull();
+  });
+});
+
+function makeConnectorConfig(overrides: Partial<TenantConnector> = {}): TenantConnector {
+  return {
+    id: 'c-1',
+    tenant_id: 't-1',
+    name: 'products',
+    description: 'Product catalog',
+    database_type: 'google_sheets',
+    database_credentials: encrypt(JSON.stringify({ spreadsheet_id: 'abc', service_account_key: {} })),
+    is_active: true,
+    priority: 0,
+    created_at: new Date(),
+    updated_at: new Date(),
+    ...overrides,
+  };
+}
+
+describe('createConnectorFromConfig', () => {
+  it('creates connector from TenantConnector config', () => {
+    const config = makeConnectorConfig();
+    const connector = createConnectorFromConfig(config);
+    expect(connector).toBeInstanceOf(GoogleSheetsConnector);
+  });
+
+  it('returns null for invalid encrypted data', () => {
+    const config = makeConnectorConfig({
+      database_credentials: Buffer.from('invalid'),
+    });
+    expect(createConnectorFromConfig(config)).toBeNull();
+  });
+
+  it('creates RestAPIConnector from config', () => {
+    const config = makeConnectorConfig({
+      database_type: 'rest_api',
+      database_credentials: encrypt(JSON.stringify({ base_url: 'https://api.test', search_endpoint: '/search', search_param: 'q' })),
+    });
+    expect(createConnectorFromConfig(config)).toBeInstanceOf(RestAPIConnector);
+  });
+});
+
+describe('createConnectorsForTenant', () => {
+  it('creates a map of named connectors', () => {
+    const configs = [
+      makeConnectorConfig({ name: 'products' }),
+      makeConnectorConfig({
+        name: 'prices',
+        database_type: 'rest_api',
+        database_credentials: encrypt(JSON.stringify({ base_url: 'https://api.test', search_endpoint: '/search', search_param: 'q' })),
+      }),
+    ];
+
+    const map = createConnectorsForTenant(configs);
+    expect(map.size).toBe(2);
+    expect(map.has('products')).toBe(true);
+    expect(map.has('prices')).toBe(true);
+  });
+
+  it('skips connectors that fail to create', () => {
+    const configs = [
+      makeConnectorConfig({ name: 'good' }),
+      makeConnectorConfig({ name: 'bad', database_credentials: Buffer.from('invalid') }),
+    ];
+
+    const map = createConnectorsForTenant(configs);
+    expect(map.size).toBe(1);
+    expect(map.has('good')).toBe(true);
+    expect(map.has('bad')).toBe(false);
+  });
+
+  it('returns empty map for empty input', () => {
+    const map = createConnectorsForTenant([]);
+    expect(map.size).toBe(0);
   });
 });

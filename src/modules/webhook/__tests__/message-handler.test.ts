@@ -87,7 +87,7 @@ describe('message-handler', () => {
       mockConversationService.addMessage.mockResolvedValue({} as any);
       mockConversationService.setStatus.mockResolvedValue(undefined);
       mockConversationService.setHandover.mockResolvedValue(undefined);
-      mockChatwootService.createConversation.mockResolvedValue(42);
+      mockChatwootService.findOrCreateConversation.mockResolvedValue(42);
       mockChatwootService.addInternalNote.mockResolvedValue(undefined);
       mockBusinessHours.matchesHandoverKeyword.mockReturnValue(true);
 

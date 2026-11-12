@@ -41,3 +41,55 @@ export interface RestAPICredentials {
   headers?: Record<string, string>;
   result_path?: string;
 }
+
+// --- Multi-connector types ---
+
+import { DatabaseType } from '../tenant/tenant.model';
+
+export interface TenantConnector {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string | null;
+  database_type: DatabaseType;
+  database_credentials: Buffer;
+  is_active: boolean;
+  priority: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface TenantConnectorPublic {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string | null;
+  database_type: DatabaseType;
+  has_credentials: boolean;
+  is_active: boolean;
+  priority: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateConnectorInput {
+  name: string;
+  description?: string;
+  database_type: DatabaseType;
+  database_credentials: string; // plaintext JSON, will be encrypted
+  is_active?: boolean;
+  priority?: number;
+}
+
+export interface UpdateConnectorInput {
+  name?: string;
+  description?: string;
+  database_type?: DatabaseType;
+  database_credentials?: string;
+  is_active?: boolean;
+  priority?: number;
+}
+
+export interface NamedConnectorQueryResult extends ConnectorQueryResult {
+  connector_name: string;
+}

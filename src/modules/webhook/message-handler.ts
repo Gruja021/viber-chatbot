@@ -325,7 +325,7 @@ async function ensureChatwootConversation(
   }
 
   try {
-    const chatwootConvId = await chatwootService.createConversation({
+    const chatwootConvId = await chatwootService.findOrCreateConversation({
       chatwootApiToken: tenant.chatwoot_api_token,
       chatwootAccountId: tenant.chatwoot_account_id!,
       inboxId: tenant.chatwoot_inbox_id!,

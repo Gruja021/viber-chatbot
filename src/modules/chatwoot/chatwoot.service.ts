@@ -8,13 +8,20 @@ import {
 const CHATWOOT_BASE_URL = process.env.CHATWOOT_BASE_URL || 'http://localhost:3000';
 
 export const chatwootService = {
-  async createConversation(options: ChatwootCreateConversationOptions): Promise<number | null> {
+  async findOrCreateConversation(options: ChatwootCreateConversationOptions): Promise<number | null> {
     try {
       // First, find or create a contact
       const contactId = await findOrCreateContact(options);
       if (!contactId) return null;
 
-      // Create conversation
+      // Search for existing open conversation for this contact in this inbox
+      const existingId = await findOpenConversation(options, contactId);
+      if (existingId) {
+        logger.info({ conversationId: existingId, contactId }, 'Reusing existing Chatwoot conversation');
+        return existingId;
+      }
+
+      // Create new conversation only if none exists
       const response = await axios.post(
         `${CHATWOOT_BASE_URL}/api/v1/accounts/${options.chatwootAccountId}/conversations`,
         {
@@ -34,9 +41,14 @@ export const chatwootService = {
       logger.info({ conversationId, contactId }, 'Chatwoot conversation created');
       return conversationId;
     } catch (err) {
-      logger.error({ err }, 'Failed to create Chatwoot conversation');
+      logger.error({ err }, 'Failed to find or create Chatwoot conversation');
       return null;
     }
+  },
+
+  /** @deprecated Use findOrCreateConversation instead */
+  async createConversation(options: ChatwootCreateConversationOptions): Promise<number | null> {
+    return this.findOrCreateConversation(options);
   },
 
   async sendMessage(options: ChatwootSendMessageOptions): Promise<void> {
@@ -109,6 +121,30 @@ export const chatwootService = {
     }
   },
 };
+
+async function findOpenConversation(
+  options: ChatwootCreateConversationOptions,
+  contactId: number
+): Promise<number | null> {
+  try {
+    const response = await axios.get(
+      `${CHATWOOT_BASE_URL}/api/v1/accounts/${options.chatwootAccountId}/contacts/${contactId}/conversations`,
+      {
+        headers: { 'api_access_token': options.chatwootApiToken },
+      }
+    );
+
+    const conversations = response.data?.payload || [];
+    const open = conversations.find(
+      (c: any) => c.inbox_id === options.inboxId && (c.status === 'open' || c.status === 'pending')
+    );
+
+    return open?.id || null;
+  } catch (err) {
+    logger.error({ err, contactId }, 'Failed to search existing Chatwoot conversations');
+    return null;
+  }
+}
 
 async function findOrCreateContact(
   options: ChatwootCreateConversationOptions

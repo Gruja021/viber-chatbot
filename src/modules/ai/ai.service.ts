@@ -3,7 +3,9 @@ import { env } from '../../config/env';
 import { logger } from '../../config/logger';
 import { Tenant } from '../tenant/tenant.model';
 import { Message } from '../conversation/conversation.model';
-import { createConnector } from '../connector/connector.factory';
+import { createConnector, createConnectorsForTenant } from '../connector/connector.factory';
+import { connectorRepository } from '../connector/connector.repository';
+import { IDataConnector, TenantConnector, NamedConnectorQueryResult } from '../connector/connector.types';
 import { ANTI_HALLUCINATION_PREFIX, NO_DATABASE_SUFFIX } from './ai.prompts';
 import { AIResponse } from './ai.types';
 
@@ -46,6 +48,36 @@ const ESCALATE_TOOL: OpenAI.Chat.Completions.ChatCompletionTool = {
   },
 };
 
+function buildSearchTool(connectorConfigs: TenantConnector[]): OpenAI.Chat.Completions.ChatCompletionTool {
+  const sourceNames = connectorConfigs.map(c => c.name);
+  const sourceDescriptions = connectorConfigs
+    .map(c => `- "${c.name}": ${c.description || c.database_type}`)
+    .join('\n');
+
+  return {
+    type: 'function',
+    function: {
+      name: 'search_database',
+      description: `Search business data sources for products, services, or other information.\n\nAvailable sources:\n${sourceDescriptions}\n\nOmit "source" to search all sources.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          search_term: {
+            type: 'string',
+            description: 'The search term to look up',
+          },
+          source: {
+            type: 'string',
+            description: 'Specific data source to search. Omit to search all.',
+            enum: sourceNames,
+          },
+        },
+        required: ['search_term'],
+      },
+    },
+  };
+}
+
 function buildSystemMessage(tenant: Tenant, hasConnector: boolean): string {
   let prompt = ANTI_HALLUCINATION_PREFIX;
   if (tenant.system_prompt) {
@@ -76,11 +108,47 @@ function formatMessages(
   return messages;
 }
 
-function buildTools(hasConnector: boolean, hasChatwoot: boolean): OpenAI.Chat.Completions.ChatCompletionTool[] | undefined {
+function buildTools(
+  hasConnector: boolean,
+  hasChatwoot: boolean,
+  searchTool?: OpenAI.Chat.Completions.ChatCompletionTool,
+): OpenAI.Chat.Completions.ChatCompletionTool[] | undefined {
   const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [];
-  if (hasConnector) tools.push(SEARCH_TOOL);
+  if (hasConnector) tools.push(searchTool || SEARCH_TOOL);
   if (hasChatwoot) tools.push(ESCALATE_TOOL);
   return tools.length > 0 ? tools : undefined;
+}
+
+async function executeSearch(
+  searchTerm: string,
+  source: string | undefined,
+  connectorMap: Map<string, IDataConnector>,
+): Promise<NamedConnectorQueryResult[]> {
+  if (source && connectorMap.has(source)) {
+    const connector = connectorMap.get(source)!;
+    const result = await connector.query(searchTerm);
+    return [{ ...result, connector_name: source }];
+  }
+
+  // Search all connectors
+  const results: NamedConnectorQueryResult[] = [];
+  for (const [name, connector] of connectorMap) {
+    try {
+      const result = await connector.query(searchTerm);
+      results.push({ ...result, connector_name: name });
+    } catch (err) {
+      logger.error({ err, connectorName: name }, 'Multi-connector search error');
+      results.push({
+        success: false,
+        data: [],
+        total_results: 0,
+        source: name,
+        query_description: `Error searching ${name}`,
+        connector_name: name,
+      });
+    }
+  }
+  return results;
 }
 
 export const aiService = {
@@ -91,14 +159,33 @@ export const aiService = {
   ): Promise<AIResponse> {
     try {
       const client = new OpenAI({ apiKey: tenant.openai_api_key || env.OPENAI_API_KEY });
-      const connector = createConnector(tenant);
-      const hasConnector = connector !== null;
-      logger.info({ tenantId: tenant.id, hasConnector, hasDatabaseType: !!tenant.database_type, hasCreds: !!tenant.database_credentials }, 'AI connector status');
+
+      // Try multi-connector first, fallback to legacy single connector
+      const connectorConfigs = await connectorRepository.findActiveByTenantId(tenant.id);
+      let connectorMap: Map<string, IDataConnector>;
+      let searchTool: OpenAI.Chat.Completions.ChatCompletionTool | undefined;
+
+      if (connectorConfigs.length > 0) {
+        connectorMap = createConnectorsForTenant(connectorConfigs);
+        if (connectorConfigs.length > 1) {
+          searchTool = buildSearchTool(connectorConfigs);
+        }
+      } else {
+        // Legacy fallback: single connector from tenant fields
+        connectorMap = new Map();
+        const legacyConnector = createConnector(tenant);
+        if (legacyConnector) {
+          connectorMap.set('database', legacyConnector);
+        }
+      }
+
+      const hasConnector = connectorMap.size > 0;
+      logger.info({ tenantId: tenant.id, hasConnector, connectorCount: connectorMap.size }, 'AI connector status');
       const hasChatwoot = !!(tenant.chatwoot_api_token);
 
       const systemMessage = buildSystemMessage(tenant, hasConnector);
       const messages = formatMessages(systemMessage, conversationHistory, userMessage);
-      const tools = buildTools(hasConnector, hasChatwoot);
+      const tools = buildTools(hasConnector, hasChatwoot, searchTool);
 
       const model = tenant.openai_model || MODEL;
 
@@ -134,16 +221,17 @@ export const aiService = {
             };
           }
 
-          if (toolCall.function.name === 'search_database' && connector) {
+          if (toolCall.function.name === 'search_database' && hasConnector) {
             const args = JSON.parse(toolCall.function.arguments);
-            logger.info({ searchTerm: args.search_term, tenantId: tenant.id }, 'AI calling search_database');
-            const result = await connector.query(args.search_term);
-            logger.info({ searchTerm: args.search_term, totalResults: result.total_results, success: result.success, tenantId: tenant.id }, 'search_database result');
+            logger.info({ searchTerm: args.search_term, source: args.source, tenantId: tenant.id }, 'AI calling search_database');
+            const results = await executeSearch(args.search_term, args.source, connectorMap);
+            const totalResults = results.reduce((sum, r) => sum + r.total_results, 0);
+            logger.info({ searchTerm: args.search_term, totalResults, resultCount: results.length, tenantId: tenant.id }, 'search_database result');
 
             messages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
-              content: JSON.stringify(result),
+              content: JSON.stringify(results.length === 1 ? results[0] : results),
             });
 
             functionCallCount++;

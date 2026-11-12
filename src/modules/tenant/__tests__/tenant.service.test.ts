@@ -181,6 +181,38 @@ describe('tenantService', () => {
       expect(result).toHaveProperty('openai_model', 'gpt-4o');
     });
 
+    it('includes has_viber_token=true when token is set', async () => {
+      const tenant = makeTenant({ viber_auth_token: 'viber-token' });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X' });
+      expect(result).toHaveProperty('has_viber_token', true);
+    });
+
+    it('includes has_viber_token=false when token is null', async () => {
+      const tenant = makeTenant({ viber_auth_token: null });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X' });
+      expect(result).toHaveProperty('has_viber_token', false);
+    });
+
+    it('includes has_telegram_token=true when token is set', async () => {
+      const tenant = makeTenant({ telegram_bot_token: 'tg-token' });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X' });
+      expect(result).toHaveProperty('has_telegram_token', true);
+    });
+
+    it('includes has_telegram_token=false when token is null', async () => {
+      const tenant = makeTenant({ telegram_bot_token: null });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X' });
+      expect(result).toHaveProperty('has_telegram_token', false);
+    });
+
     it('includes has_openai_api_key=true when key is set', async () => {
       const tenant = makeTenant({ openai_api_key: 'sk-test' });
       mockRepo.create.mockResolvedValue(tenant);

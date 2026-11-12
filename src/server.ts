@@ -4,6 +4,7 @@ import { app } from './app';
 import { pool } from './config/database';
 import { redis } from './config/redis';
 import { startAgentTimeoutListener, stopAgentTimeoutListener } from './modules/agent-timeout/agent-timeout.listener';
+import { startDataRetentionScheduler, stopDataRetentionScheduler } from './modules/data-retention/data-retention.scheduler';
 
 async function start() {
   const server = app.listen(env.PORT, () => {
@@ -13,10 +14,14 @@ async function start() {
   // Start agent timeout listener for Redis keyspace events
   await startAgentTimeoutListener();
 
+  // Start data retention scheduler (checks hourly, runs cleanup at 3 AM UTC)
+  startDataRetentionScheduler();
+
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutting down gracefully');
     server.close(async () => {
       stopAgentTimeoutListener();
+      stopDataRetentionScheduler();
       await pool.end();
       redis.disconnect();
       logger.info('Server stopped');

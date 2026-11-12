@@ -1,17 +1,21 @@
 import { checkTenantHealth } from '../tenant.health';
 import { tenantService } from '../tenant.service';
 import { viberService } from '../../webhook/viber.service';
-import { createConnector } from '../../connector/connector.factory';
+import { createConnector, createConnectorFromConfig } from '../../connector/connector.factory';
+import { connectorRepository } from '../../connector/connector.repository';
 import axios from 'axios';
 
 jest.mock('../tenant.service');
 jest.mock('../../webhook/viber.service');
 jest.mock('../../connector/connector.factory');
+jest.mock('../../connector/connector.repository');
 jest.mock('axios');
 
 const mockTenantService = tenantService as jest.Mocked<typeof tenantService>;
 const mockViberService = viberService as jest.Mocked<typeof viberService>;
 const mockCreateConnector = createConnector as jest.MockedFunction<typeof createConnector>;
+const mockCreateConnectorFromConfig = createConnectorFromConfig as jest.MockedFunction<typeof createConnectorFromConfig>;
+const mockConnectorRepo = connectorRepository as jest.Mocked<typeof connectorRepository>;
 const mockAxios = axios as jest.Mocked<typeof axios>;
 
 const mockTenant = {
@@ -36,6 +40,8 @@ const mockTenant = {
 describe('checkTenantHealth', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: no multi-connectors (legacy mode)
+    mockConnectorRepo.findActiveByTenantId.mockResolvedValue([]);
   });
 
   it('returns all healthy when everything works', async () => {
@@ -418,6 +424,48 @@ describe('checkTenantHealth', () => {
       check: 'data_source',
       healthy: true,
       detail: 'woocommerce connected',
+    });
+  });
+
+  describe('multi-connector health checks', () => {
+    const setupBasicMocks = () => {
+      mockTenantService.getById.mockResolvedValue(mockTenant as any);
+      mockViberService.getAccountInfo.mockResolvedValue({
+        status: 0, status_message: 'ok', name: 'Bot', uri: 'bot',
+        webhook: 'https://test.example.com/api/viber/webhook/test-firm',
+        subscribers_count: 0,
+      });
+      mockAxios.get.mockResolvedValue({ data: { id: 10 } });
+    };
+
+    it('checks each connector separately when multi-connectors exist', async () => {
+      setupBasicMocks();
+      mockConnectorRepo.findActiveByTenantId.mockResolvedValue([
+        { id: 'c1', tenant_id: 't-1', name: 'products', database_type: 'google_sheets', database_credentials: Buffer.from('enc'), is_active: true, priority: 0 } as any,
+        { id: 'c2', tenant_id: 't-1', name: 'prices', database_type: 'rest_api', database_credentials: Buffer.from('enc'), is_active: true, priority: 1 } as any,
+      ]);
+      const mockConn = { query: jest.fn(), testConnection: jest.fn().mockResolvedValue(true) };
+      mockCreateConnectorFromConfig.mockReturnValue(mockConn as any);
+
+      const report = await checkTenantHealth('t-1');
+
+      const dsChecks = report.checks.filter(c => c.check.startsWith('data_source:'));
+      expect(dsChecks).toHaveLength(2);
+      expect(dsChecks[0]).toMatchObject({ check: 'data_source:products', healthy: true });
+      expect(dsChecks[1]).toMatchObject({ check: 'data_source:prices', healthy: true });
+    });
+
+    it('reports individual connector failure in multi-connector mode', async () => {
+      setupBasicMocks();
+      mockConnectorRepo.findActiveByTenantId.mockResolvedValue([
+        { id: 'c1', tenant_id: 't-1', name: 'products', database_type: 'google_sheets', database_credentials: Buffer.from('enc'), is_active: true, priority: 0 } as any,
+      ]);
+      mockCreateConnectorFromConfig.mockReturnValue(null);
+
+      const report = await checkTenantHealth('t-1');
+
+      const dsChecks = report.checks.filter(c => c.check.startsWith('data_source:'));
+      expect(dsChecks[0]).toMatchObject({ check: 'data_source:products', healthy: false, detail: 'Failed to create connector' });
     });
   });
 });

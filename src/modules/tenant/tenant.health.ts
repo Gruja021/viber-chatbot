@@ -2,7 +2,8 @@ import { logger } from '../../config/logger';
 import { tenantService } from './tenant.service';
 import { viberService } from '../webhook/viber.service';
 import { chatwootService } from '../chatwoot/chatwoot.service';
-import { createConnector } from '../connector/connector.factory';
+import { createConnector, createConnectorFromConfig } from '../connector/connector.factory';
+import { connectorRepository } from '../connector/connector.repository';
 import { Tenant } from './tenant.model';
 import { env } from '../../config/env';
 
@@ -78,24 +79,50 @@ async function checkChatwoot(tenant: Tenant): Promise<HealthCheckResult> {
   }
 }
 
-async function checkDataSource(tenant: Tenant): Promise<HealthCheckResult> {
+async function checkDataSources(tenant: Tenant): Promise<HealthCheckResult[]> {
+  // Try multi-connector first
+  const connectorConfigs = await connectorRepository.findActiveByTenantId(tenant.id);
+
+  if (connectorConfigs.length > 0) {
+    const results: HealthCheckResult[] = [];
+    for (const config of connectorConfigs) {
+      try {
+        const connector = createConnectorFromConfig(config);
+        if (!connector) {
+          results.push({ check: `data_source:${config.name}`, healthy: false, detail: 'Failed to create connector' });
+          continue;
+        }
+        const ok = await connector.testConnection();
+        results.push({
+          check: `data_source:${config.name}`,
+          healthy: ok,
+          detail: ok ? `${config.database_type} connected` : `${config.database_type} connection failed`,
+        });
+      } catch (err) {
+        results.push({ check: `data_source:${config.name}`, healthy: false, detail: 'Connection test error' });
+      }
+    }
+    return results;
+  }
+
+  // Legacy fallback
   if (!tenant.database_type || !tenant.database_credentials) {
-    return { check: 'data_source', healthy: true, detail: 'N/A — no data source configured' };
+    return [{ check: 'data_source', healthy: true, detail: 'N/A — no data source configured' }];
   }
 
   try {
     const connector = createConnector(tenant);
     if (!connector) {
-      return { check: 'data_source', healthy: false, detail: 'Failed to create connector' };
+      return [{ check: 'data_source', healthy: false, detail: 'Failed to create connector' }];
     }
     const ok = await connector.testConnection();
-    return {
+    return [{
       check: 'data_source',
       healthy: ok,
       detail: ok ? `${tenant.database_type} connected` : `${tenant.database_type} connection failed`,
-    };
+    }];
   } catch (err) {
-    return { check: 'data_source', healthy: false, detail: 'Data source connection error' };
+    return [{ check: 'data_source', healthy: false, detail: 'Data source connection error' }];
   }
 }
 
@@ -112,13 +139,13 @@ export async function checkTenantHealth(tenantId: string): Promise<TenantHealthR
     };
   }
 
-  const [viberCheck, chatwootCheck, dataSourceCheck] = await Promise.all([
+  const [viberCheck, chatwootCheck, dataSourceChecks] = await Promise.all([
     checkViber(tenant),
     checkChatwoot(tenant),
-    checkDataSource(tenant),
+    checkDataSources(tenant),
   ]);
 
-  const checks = [dbCheck, viberCheck, chatwootCheck, dataSourceCheck];
+  const checks = [dbCheck, viberCheck, chatwootCheck, ...dataSourceChecks];
   const allHealthy = checks.every((c) => c.healthy);
 
   logger.info({ tenantId, allHealthy }, 'Tenant health check completed');

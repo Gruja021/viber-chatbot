@@ -15,6 +15,8 @@ export interface Tenant {
   firm_name: string;
   viber_auth_token: string | null;
   telegram_bot_token: string | null;
+  has_viber_token: boolean;
+  has_telegram_token: boolean;
   database_type: DatabaseType | null;
   has_database_credentials: boolean;
   system_prompt: string;
@@ -103,4 +105,37 @@ export interface SystemHealth {
   database: 'connected' | 'disconnected';
   redis: 'connected' | 'disconnected';
   timestamp: string;
+}
+
+// --- Multi-connector types ---
+
+export interface TenantConnector {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string | null;
+  database_type: DatabaseType;
+  has_credentials: boolean;
+  is_active: boolean;
+  priority: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateConnectorInput {
+  name: string;
+  description?: string;
+  database_type: DatabaseType;
+  database_credentials: string;
+  is_active?: boolean;
+  priority?: number;
+}
+
+export interface UpdateConnectorInput {
+  name?: string;
+  description?: string;
+  database_type?: DatabaseType;
+  database_credentials?: string;
+  is_active?: boolean;
+  priority?: number;
 }

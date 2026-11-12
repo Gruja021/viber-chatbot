@@ -19,10 +19,21 @@ jest.mock('openai', () => {
 const mockQuery = jest.fn();
 jest.mock('../../connector/connector.factory', () => ({
   createConnector: jest.fn(),
+  createConnectorsForTenant: jest.fn(),
 }));
 
-import { createConnector } from '../../connector/connector.factory';
+// Mock connector repository
+jest.mock('../../connector/connector.repository', () => ({
+  connectorRepository: {
+    findActiveByTenantId: jest.fn(),
+  },
+}));
+
+import { createConnector, createConnectorsForTenant } from '../../connector/connector.factory';
+import { connectorRepository } from '../../connector/connector.repository';
 const mockCreateConnector = createConnector as jest.Mock;
+const mockCreateConnectorsForTenant = createConnectorsForTenant as jest.Mock;
+const mockConnectorRepo = connectorRepository as jest.Mocked<typeof connectorRepository>;
 
 function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
   return {
@@ -67,6 +78,8 @@ describe('aiService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCreateConnector.mockReturnValue(null);
+    // Default: no multi-connectors (legacy mode)
+    mockConnectorRepo.findActiveByTenantId.mockResolvedValue([]);
   });
 
   describe('generateResponse without connector', () => {
@@ -440,6 +453,143 @@ describe('aiService', () => {
 
       expect(result.text).toContain('nisam uspeo');
       expect(result.shouldEscalate).toBe(false);
+    });
+  });
+
+  describe('multi-connector support', () => {
+    it('uses multi-connectors when tenant_connectors exist', async () => {
+      const mockConn = { query: mockQuery, testConnection: jest.fn() };
+      const connMap = new Map([['products', mockConn]]);
+      mockConnectorRepo.findActiveByTenantId.mockResolvedValue([
+        { id: 'c1', tenant_id: 't-1', name: 'products', description: 'Product catalog', database_type: 'google_sheets', database_credentials: Buffer.from('enc'), is_active: true, priority: 0 } as any,
+      ]);
+      mockCreateConnectorsForTenant.mockReturnValue(connMap);
+
+      mockCreate.mockResolvedValueOnce({
+        choices: [{
+          message: {
+            content: null,
+            tool_calls: [{
+              id: 'call-1', type: 'function',
+              function: { name: 'search_database', arguments: '{"search_term":"widget"}' },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+      });
+      mockQuery.mockResolvedValue({ success: true, data: [{ name: 'Widget' }], total_results: 1, source: 'google_sheets', query_description: '' });
+      mockCreate.mockResolvedValueOnce({
+        choices: [{ message: { content: 'Found Widget' }, finish_reason: 'stop' }],
+      });
+
+      const result = await aiService.generateResponse(makeTenant(), [], 'widget');
+
+      expect(result.text).toBe('Found Widget');
+      expect(mockCreateConnector).not.toHaveBeenCalled();
+    });
+
+    it('builds dynamic search tool with source enum for multiple connectors', async () => {
+      const connMap = new Map([
+        ['products', { query: jest.fn(), testConnection: jest.fn() }],
+        ['prices', { query: jest.fn(), testConnection: jest.fn() }],
+      ]);
+      mockConnectorRepo.findActiveByTenantId.mockResolvedValue([
+        { id: 'c1', name: 'products', description: 'Product catalog', database_type: 'google_sheets', is_active: true } as any,
+        { id: 'c2', name: 'prices', description: 'Price list', database_type: 'rest_api', is_active: true } as any,
+      ]);
+      mockCreateConnectorsForTenant.mockReturnValue(connMap);
+
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
+      });
+
+      await aiService.generateResponse(makeTenant(), [], 'test');
+
+      const tools = mockCreate.mock.calls[0][0].tools;
+      expect(tools).toBeDefined();
+      const searchTool = tools.find((t: any) => t.function.name === 'search_database');
+      expect(searchTool.function.parameters.properties.source.enum).toEqual(['products', 'prices']);
+    });
+
+    it('falls back to legacy single connector when no multi-connectors', async () => {
+      mockConnectorRepo.findActiveByTenantId.mockResolvedValue([]);
+      mockCreateConnector.mockReturnValue({ query: mockQuery, testConnection: jest.fn() });
+
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
+      });
+
+      await aiService.generateResponse(makeTenant(), [], 'test');
+
+      expect(mockCreateConnector).toHaveBeenCalled();
+      const tools = mockCreate.mock.calls[0][0].tools;
+      expect(tools).toBeDefined();
+      expect(tools[0].function.name).toBe('search_database');
+    });
+
+    it('searches specific source when source param provided', async () => {
+      const mockProducts = { query: jest.fn().mockResolvedValue({ success: true, data: [], total_results: 0, source: 'google_sheets', query_description: '' }), testConnection: jest.fn() };
+      const mockPrices = { query: jest.fn(), testConnection: jest.fn() };
+      const connMap = new Map([['products', mockProducts], ['prices', mockPrices]]);
+      mockConnectorRepo.findActiveByTenantId.mockResolvedValue([
+        { id: 'c1', name: 'products', description: 'Products', database_type: 'google_sheets', is_active: true } as any,
+        { id: 'c2', name: 'prices', description: 'Prices', database_type: 'rest_api', is_active: true } as any,
+      ]);
+      mockCreateConnectorsForTenant.mockReturnValue(connMap);
+
+      mockCreate.mockResolvedValueOnce({
+        choices: [{
+          message: {
+            content: null,
+            tool_calls: [{
+              id: 'call-1', type: 'function',
+              function: { name: 'search_database', arguments: '{"search_term":"widget","source":"products"}' },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+      });
+      mockCreate.mockResolvedValueOnce({
+        choices: [{ message: { content: 'Done' }, finish_reason: 'stop' }],
+      });
+
+      await aiService.generateResponse(makeTenant(), [], 'widget');
+
+      expect(mockProducts.query).toHaveBeenCalledWith('widget');
+      expect(mockPrices.query).not.toHaveBeenCalled();
+    });
+
+    it('searches all connectors when source param is omitted', async () => {
+      const mockProducts = { query: jest.fn().mockResolvedValue({ success: true, data: [{ name: 'Widget' }], total_results: 1, source: 'google_sheets', query_description: '' }), testConnection: jest.fn() };
+      const mockPrices = { query: jest.fn().mockResolvedValue({ success: true, data: [{ price: '10' }], total_results: 1, source: 'rest_api', query_description: '' }), testConnection: jest.fn() };
+      const connMap = new Map([['products', mockProducts], ['prices', mockPrices]]);
+      mockConnectorRepo.findActiveByTenantId.mockResolvedValue([
+        { id: 'c1', name: 'products', description: 'Products', database_type: 'google_sheets', is_active: true } as any,
+        { id: 'c2', name: 'prices', description: 'Prices', database_type: 'rest_api', is_active: true } as any,
+      ]);
+      mockCreateConnectorsForTenant.mockReturnValue(connMap);
+
+      mockCreate.mockResolvedValueOnce({
+        choices: [{
+          message: {
+            content: null,
+            tool_calls: [{
+              id: 'call-1', type: 'function',
+              function: { name: 'search_database', arguments: '{"search_term":"widget"}' },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+      });
+      mockCreate.mockResolvedValueOnce({
+        choices: [{ message: { content: 'Found in both' }, finish_reason: 'stop' }],
+      });
+
+      const result = await aiService.generateResponse(makeTenant(), [], 'widget');
+
+      expect(result.text).toBe('Found in both');
+      expect(mockProducts.query).toHaveBeenCalledWith('widget');
+      expect(mockPrices.query).toHaveBeenCalledWith('widget');
     });
   });
 });

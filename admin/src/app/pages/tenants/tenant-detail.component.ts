@@ -73,15 +73,17 @@ import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
                 <mat-list-item>
                   <span matListItemTitle>Platforms</span>
                   <span matListItemLine>
-                    {{ tenant()!.viber_auth_token ? 'Viber' : '' }}
-                    {{ tenant()!.viber_auth_token && tenant()!.telegram_bot_token ? ' · ' : '' }}
-                    {{ tenant()!.telegram_bot_token ? 'Telegram' : '' }}
-                    {{ !tenant()!.viber_auth_token && !tenant()!.telegram_bot_token ? 'None configured' : '' }}
+                    {{ tenant()!.has_viber_token ? 'Viber' : '' }}
+                    {{ tenant()!.has_viber_token && tenant()!.has_telegram_token ? ' · ' : '' }}
+                    {{ tenant()!.has_telegram_token ? 'Telegram' : '' }}
+                    {{ !tenant()!.has_viber_token && !tenant()!.has_telegram_token ? 'None configured' : '' }}
                   </span>
                 </mat-list-item>
                 <mat-list-item>
-                  <span matListItemTitle>Database Type</span>
-                  <span matListItemLine>{{ tenant()!.database_type || 'None' }}</span>
+                  <span matListItemTitle>Data Sources</span>
+                  <span matListItemLine>
+                    <a [routerLink]="['/tenants', tenant()!.id, 'connectors']">Manage Connectors</a>
+                  </span>
                 </mat-list-item>
                 <mat-list-item>
                   <span matListItemTitle>Timezone</span>
@@ -121,6 +123,41 @@ import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
             </mat-card-actions>
           </mat-card>
         </div>
+
+        <!-- Platform Actions -->
+        @if (tenant()!.has_viber_token || tenant()!.has_telegram_token) {
+          <mat-card>
+            <mat-card-header><mat-card-title>Platform Actions</mat-card-title></mat-card-header>
+            <mat-card-content>
+              @if (tenant()!.has_viber_token) {
+                <h4 class="platform-heading">Viber</h4>
+                <div class="platform-actions">
+                  <button mat-raised-button (click)="registerViberWebhook()"
+                          [disabled]="webhookLoading()">
+                    <mat-icon>link</mat-icon> Register Webhook
+                  </button>
+                  <button mat-raised-button (click)="sendViberTest()"
+                          [disabled]="testMessageLoading()">
+                    <mat-icon>send</mat-icon> Send Test Message
+                  </button>
+                </div>
+              }
+              @if (tenant()!.has_telegram_token) {
+                <h4 class="platform-heading">Telegram</h4>
+                <div class="platform-actions">
+                  <button mat-raised-button (click)="registerTelegramWebhook()"
+                          [disabled]="webhookLoading()">
+                    <mat-icon>link</mat-icon> Register Webhook
+                  </button>
+                  <button mat-raised-button (click)="sendTelegramTest()"
+                          [disabled]="testMessageLoading()">
+                    <mat-icon>send</mat-icon> Send Test Message
+                  </button>
+                </div>
+              }
+            </mat-card-content>
+          </mat-card>
+        }
 
         <!-- AI Configuration -->
         <mat-card>
@@ -242,6 +279,9 @@ import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
       font-size: 13px;
     }
     mat-card { margin-bottom: 16px; }
+    .platform-heading { margin: 16px 0 8px; }
+    .platform-heading:first-child { margin-top: 0; }
+    .platform-actions { display: flex; gap: 8px; margin-bottom: 8px; }
   `],
 })
 export class TenantDetailComponent implements OnInit {
@@ -254,6 +294,8 @@ export class TenantDetailComponent implements OnInit {
   loading = signal(true);
   healthResult = signal<TenantHealthResponse | null>(null);
   healthLoading = signal(false);
+  webhookLoading = signal(false);
+  testMessageLoading = signal(false);
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -295,6 +337,74 @@ export class TenantDetailComponent implements OnInit {
       },
       error: () => {
         this.snackBar.open('Failed to deactivate tenant', 'OK', { duration: 3000 });
+      },
+    });
+  }
+
+  registerViberWebhook(): void {
+    const id = this.tenant()?.id;
+    if (!id) return;
+    this.webhookLoading.set(true);
+    this.tenantService.registerViberWebhook(id).subscribe({
+      next: (res) => {
+        this.webhookLoading.set(false);
+        this.snackBar.open(`Webhook registered: ${res.webhook_url}`, 'OK', { duration: 5000 });
+      },
+      error: () => {
+        this.webhookLoading.set(false);
+        this.snackBar.open('Failed to register Viber webhook', 'OK', { duration: 3000 });
+      },
+    });
+  }
+
+  registerTelegramWebhook(): void {
+    const id = this.tenant()?.id;
+    if (!id) return;
+    this.webhookLoading.set(true);
+    this.tenantService.registerTelegramWebhook(id).subscribe({
+      next: (res) => {
+        this.webhookLoading.set(false);
+        this.snackBar.open(`Webhook registered: ${res.webhook_url}`, 'OK', { duration: 5000 });
+      },
+      error: () => {
+        this.webhookLoading.set(false);
+        this.snackBar.open('Failed to register Telegram webhook', 'OK', { duration: 3000 });
+      },
+    });
+  }
+
+  sendViberTest(): void {
+    const id = this.tenant()?.id;
+    if (!id) return;
+    const userId = window.prompt('Enter Viber User ID:');
+    if (!userId) return;
+    this.testMessageLoading.set(true);
+    this.tenantService.sendViberTestMessage(id, userId).subscribe({
+      next: () => {
+        this.testMessageLoading.set(false);
+        this.snackBar.open('Test message sent', 'OK', { duration: 3000 });
+      },
+      error: () => {
+        this.testMessageLoading.set(false);
+        this.snackBar.open('Failed to send test message', 'OK', { duration: 3000 });
+      },
+    });
+  }
+
+  sendTelegramTest(): void {
+    const id = this.tenant()?.id;
+    if (!id) return;
+    const chatId = window.prompt('Enter Telegram Chat ID:');
+    if (!chatId) return;
+    this.testMessageLoading.set(true);
+    this.tenantService.sendTelegramTestMessage(id, chatId).subscribe({
+      next: () => {
+        this.testMessageLoading.set(false);
+        this.snackBar.open('Test message sent', 'OK', { duration: 3000 });
+      },
+      error: () => {
+        this.testMessageLoading.set(false);
+        this.snackBar.open('Failed to send test message', 'OK', { duration: 3000 });
       },
     });
   }

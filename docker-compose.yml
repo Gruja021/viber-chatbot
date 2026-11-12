@@ -64,13 +64,13 @@ services:
     environment:
       RAILS_ENV: production
       SECRET_KEY_BASE: replace_with_lengthy_secure_hex_string_at_least_64_chars_long_1234567890abcdef
-      FRONTEND_URL: http://localhost:3001
+      FRONTEND_URL: ${CHATWOOT_FRONTEND_URL:-http://localhost:3001}
       DATABASE_URL: postgresql://viber_chatbot:viber_chatbot_pass@postgres:5432/chatwoot
       REDIS_URL: redis://redis:6379
       RAILS_LOG_TO_STDOUT: "true"
     entrypoint: /bin/sh
     command: >
-      -c "bundle exec rails db:chatwoot_prepare && bundle exec rails s -b 0.0.0.0 -p 3000"
+      -c "rm -f /app/tmp/pids/server.pid && bundle exec rails db:chatwoot_prepare && bundle exec rails s -b 0.0.0.0 -p 3000"
 
   chatwoot-sidekiq:
     image: chatwoot/chatwoot:v4.0.2
@@ -79,7 +79,7 @@ services:
     environment:
       RAILS_ENV: production
       SECRET_KEY_BASE: replace_with_lengthy_secure_hex_string_at_least_64_chars_long_1234567890abcdef
-      FRONTEND_URL: http://localhost:3001
+      FRONTEND_URL: ${CHATWOOT_FRONTEND_URL:-http://localhost:3001}
       DATABASE_URL: postgresql://viber_chatbot:viber_chatbot_pass@postgres:5432/chatwoot
       REDIS_URL: redis://redis:6379
     command: bundle exec sidekiq -C config/sidekiq.yml

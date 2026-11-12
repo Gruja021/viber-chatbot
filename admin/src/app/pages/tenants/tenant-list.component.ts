@@ -72,10 +72,10 @@ import { Tenant, TenantStatus } from '../../core/models/tenant.model';
               <ng-container matColumnDef="platforms">
                 <th mat-header-cell *matHeaderCellDef>Platforms</th>
                 <td mat-cell *matCellDef="let t">
-                  @if (t.viber_auth_token) {
+                  @if (t.has_viber_token) {
                     <mat-icon class="platform-icon viber" title="Viber">chat</mat-icon>
                   }
-                  @if (t.telegram_bot_token) {
+                  @if (t.has_telegram_token) {
                     <mat-icon class="platform-icon telegram" title="Telegram">send</mat-icon>
                   }
                 </td>

@@ -3,6 +3,7 @@ import {
   ChatwootAgent,
   SystemHealth,
   TenantHealthResponse,
+  TenantConnector,
 } from '../core/models/tenant.model';
 
 export function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
@@ -12,6 +13,8 @@ export function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     firm_name: 'Test Company',
     viber_auth_token: 'viber-token-123',
     telegram_bot_token: 'telegram-token-456',
+    has_viber_token: true,
+    has_telegram_token: true,
     database_type: 'google_sheets',
     has_database_credentials: true,
     system_prompt: 'You are a helpful assistant.',
@@ -56,6 +59,24 @@ export function makeSystemHealth(
     database: 'connected',
     redis: 'connected',
     timestamp: '2024-06-01T12:00:00Z',
+    ...overrides,
+  };
+}
+
+export function makeTenantConnector(
+  overrides: Partial<TenantConnector> = {}
+): TenantConnector {
+  return {
+    id: 'c-1',
+    tenant_id: 'tenant-1',
+    name: 'products',
+    description: 'Product catalog',
+    database_type: 'google_sheets',
+    has_credentials: true,
+    is_active: true,
+    priority: 0,
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
     ...overrides,
   };
 }

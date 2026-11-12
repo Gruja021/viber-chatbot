@@ -4,6 +4,7 @@ import cors from 'cors';
 import { errorHandler } from './middleware/error-handler';
 import { webhookRateLimiter, apiRateLimiter } from './middleware/rate-limiter';
 import { tenantRoutes } from './modules/tenant/tenant.routes';
+import { connectorRoutes } from './modules/connector/connector.routes';
 import { webhookRoutes } from './modules/webhook/webhook.routes';
 import { chatwootWebhookRoutes } from './modules/chatwoot/chatwoot.webhook.routes';
 import { telegramRoutes } from './modules/webhook/telegram.routes';
@@ -44,6 +45,7 @@ app.get('/health', async (_req, res) => {
 
 // Routes
 app.use('/api/tenants', apiRateLimiter, tenantRoutes);
+app.use('/api/tenants/:id/connectors', apiRateLimiter, connectorRoutes);
 app.use('/api/viber/webhook', webhookRateLimiter);
 app.use('/api/viber', webhookRoutes);
 app.use('/api/telegram', telegramRoutes);

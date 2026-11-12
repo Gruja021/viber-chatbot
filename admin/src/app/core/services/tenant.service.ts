@@ -44,4 +44,32 @@ export class TenantService {
       `${this.baseUrl}/api/tenants/${id}/health`
     );
   }
+
+  registerViberWebhook(tenantId: string): Observable<{ message: string; webhook_url: string }> {
+    return this.http.post<{ message: string; webhook_url: string }>(
+      `${this.baseUrl}/api/viber/register-webhook`,
+      { tenant_id: tenantId }
+    );
+  }
+
+  registerTelegramWebhook(tenantId: string): Observable<{ message: string; webhook_url: string }> {
+    return this.http.post<{ message: string; webhook_url: string }>(
+      `${this.baseUrl}/api/telegram/register-webhook`,
+      { tenant_id: tenantId }
+    );
+  }
+
+  sendViberTestMessage(tenantId: string, userId: string): Observable<any> {
+    return this.http.post(
+      `${this.baseUrl}/api/viber/test-message`,
+      { tenant_id: tenantId, viber_user_id: userId }
+    );
+  }
+
+  sendTelegramTestMessage(tenantId: string, chatId: string): Observable<any> {
+    return this.http.post(
+      `${this.baseUrl}/api/telegram/test-message`,
+      { tenant_id: tenantId, chat_id: chatId }
+    );
+  }
 }

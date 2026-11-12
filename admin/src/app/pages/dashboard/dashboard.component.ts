@@ -108,8 +108,8 @@ import { Tenant, SystemHealth } from '../../core/models/tenant.model';
                   <span matListItemTitle>{{ tenant.firm_name }}</span>
                   <span matListItemLine>
                     {{ tenant.slug }}
-                    @if (tenant.viber_auth_token) { · Viber }
-                    @if (tenant.telegram_bot_token) { · Telegram }
+                    @if (tenant.has_viber_token) { · Viber }
+                    @if (tenant.has_telegram_token) { · Telegram }
                   </span>
                   <div matListItemMeta>
                     <mat-chip-set>

@@ -79,6 +79,8 @@ export interface TenantPublic {
   id: string;
   slug: string;
   firm_name: string;
+  has_viber_token: boolean;
+  has_telegram_token: boolean;
   database_type: DatabaseType | null;
   has_database_credentials: boolean;
   system_prompt: string;
