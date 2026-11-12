@@ -1,5 +1,6 @@
 export type TenantStatus = 'active' | 'inactive' | 'suspended';
 export type DatabaseType = 'google_sheets' | 'woocommerce' | 'postgresql' | 'mysql' | 'rest_api';
+export type ChatwootSetupStatus = 'none' | 'pending' | 'completed' | 'failed';
 
 export type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 
@@ -29,6 +30,8 @@ export interface Tenant {
   handover_keywords: string[];
   agent_timeout_seconds: number;
   session_timeout_hours: number;
+  chatwoot_setup_status: ChatwootSetupStatus;
+  chatwoot_setup_error: string | null;
   status: TenantStatus;
   created_at: Date;
   updated_at: Date;
@@ -52,6 +55,7 @@ export interface CreateTenantInput {
   handover_keywords?: string[];
   agent_timeout_seconds?: number;
   session_timeout_hours?: number;
+  auto_setup_chatwoot?: boolean;
 }
 
 export interface UpdateTenantInput {
@@ -93,6 +97,8 @@ export interface TenantPublic {
   handover_keywords: string[];
   agent_timeout_seconds: number;
   session_timeout_hours: number;
+  chatwoot_setup_status: ChatwootSetupStatus;
+  chatwoot_setup_error: string | null;
   status: TenantStatus;
   created_at: Date;
   updated_at: Date;

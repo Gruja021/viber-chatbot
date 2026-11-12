@@ -4,6 +4,7 @@ import {
   SystemHealth,
   TenantHealthResponse,
   TenantConnector,
+  ChatwootSetupStatus,
 } from '../core/models/tenant.model';
 
 export function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
@@ -32,6 +33,8 @@ export function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     handover_keywords: ['agent', 'human'],
     agent_timeout_seconds: 180,
     session_timeout_hours: 24,
+    chatwoot_setup_status: 'none' as ChatwootSetupStatus,
+    chatwoot_setup_error: null,
     status: 'active',
     created_at: '2024-01-15T10:00:00Z',
     updated_at: '2024-06-01T12:00:00Z',

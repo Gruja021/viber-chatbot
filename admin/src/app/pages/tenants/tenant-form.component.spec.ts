@@ -476,6 +476,67 @@ describe('TenantFormComponent', () => {
     });
   });
 
+  // ---- Auto-setup Chatwoot ----
+  describe('Auto-setup Chatwoot', () => {
+    beforeEach(() => {
+      setup(null);
+      fixture.detectChanges();
+    });
+
+    it('should have autoSetupChatwoot enabled by default', () => {
+      expect(component.autoSetupChatwoot()).toBeTrue();
+    });
+
+    it('should hide manual Chatwoot fields when auto-setup is on', () => {
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.textContent).toContain('Auto-setup Chatwoot');
+      expect(compiled.textContent).toContain('automatically');
+      expect(compiled.querySelector('input[formControlName="chatwoot_account_id"]')).toBeNull();
+    });
+
+    it('should show manual Chatwoot fields when auto-setup is off', () => {
+      component.autoSetupChatwoot.set(false);
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.querySelector('input[formControlName="chatwoot_account_id"]')).toBeTruthy();
+    });
+
+    it('should include auto_setup_chatwoot=true in create payload', () => {
+      component.form.patchValue({ slug: 'new-co', firm_name: 'New Co' });
+      component.onSubmit();
+
+      const req = httpTesting.expectOne('/api/tenants');
+      expect(req.request.body.auto_setup_chatwoot).toBeTrue();
+      req.flush(makeTenant({ id: 'new-id', slug: 'new-co' }));
+    });
+
+    it('should include auto_setup_chatwoot=false in create payload when unchecked', () => {
+      component.autoSetupChatwoot.set(false);
+      component.form.patchValue({ slug: 'new-co', firm_name: 'New Co' });
+      component.onSubmit();
+
+      const req = httpTesting.expectOne('/api/tenants');
+      expect(req.request.body.auto_setup_chatwoot).toBeFalse();
+      req.flush(makeTenant({ id: 'new-id', slug: 'new-co' }));
+    });
+
+  });
+
+  describe('Auto-setup Chatwoot in edit mode', () => {
+    beforeEach(() => {
+      setup('tenant-1');
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+      fixture.detectChanges();
+    });
+
+    it('should not show auto-setup checkbox in edit mode', () => {
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.textContent).not.toContain('Auto-setup Chatwoot');
+    });
+  });
+
   // ---- Data Sources card ----
   describe('Data Sources card', () => {
     it('should show "added after creation" hint in create mode', () => {

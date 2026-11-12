@@ -23,4 +23,5 @@ export const env = {
   ENCRYPTION_KEY: required('ENCRYPTION_KEY'),
   WEBHOOK_BASE_URL: required('WEBHOOK_BASE_URL'),
   OPENAI_API_KEY: required('OPENAI_API_KEY'),
+  CHATWOOT_PLATFORM_TOKEN: process.env.CHATWOOT_PLATFORM_TOKEN || '',
 } as const;

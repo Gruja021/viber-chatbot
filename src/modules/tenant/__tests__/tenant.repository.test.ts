@@ -397,6 +397,61 @@ describe('tenantRepository', () => {
     });
   });
 
+  describe('updateChatwootSetupStatus', () => {
+    it('updates status to pending with null error', async () => {
+      const updated = { id: 'uuid-1', chatwoot_setup_status: 'pending', chatwoot_setup_error: null };
+      mockQuery.mockResolvedValue({ rows: [updated] });
+
+      const result = await tenantRepository.updateChatwootSetupStatus('uuid-1', 'pending');
+      expect(result).toEqual(updated);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('chatwoot_setup_status = $1'),
+        ['pending', null, 'uuid-1']
+      );
+    });
+
+    it('updates status to completed', async () => {
+      const updated = { id: 'uuid-1', chatwoot_setup_status: 'completed' };
+      mockQuery.mockResolvedValue({ rows: [updated] });
+
+      const result = await tenantRepository.updateChatwootSetupStatus('uuid-1', 'completed');
+      expect(result).toEqual(updated);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('chatwoot_setup_status = $1'),
+        ['completed', null, 'uuid-1']
+      );
+    });
+
+    it('updates status to failed with error message', async () => {
+      const updated = { id: 'uuid-1', chatwoot_setup_status: 'failed', chatwoot_setup_error: 'Connection refused' };
+      mockQuery.mockResolvedValue({ rows: [updated] });
+
+      const result = await tenantRepository.updateChatwootSetupStatus('uuid-1', 'failed', 'Connection refused');
+      expect(result).toEqual(updated);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('chatwoot_setup_error = $2'),
+        ['failed', 'Connection refused', 'uuid-1']
+      );
+    });
+
+    it('returns null when tenant not found', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+
+      const result = await tenantRepository.updateChatwootSetupStatus('nonexistent', 'pending');
+      expect(result).toBeNull();
+    });
+
+    it('includes updated_at = NOW() in query', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 'uuid-1' }] });
+
+      await tenantRepository.updateChatwootSetupStatus('uuid-1', 'pending');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('updated_at = NOW()'),
+        expect.any(Array)
+      );
+    });
+  });
+
   describe('deactivate', () => {
     it('sets status to inactive', async () => {
       const deactivated = { id: 'uuid-1', status: 'inactive' };

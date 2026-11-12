@@ -1,5 +1,5 @@
 import { pool } from '../../config/database';
-import { Tenant, CreateTenantInput, UpdateTenantInput } from './tenant.model';
+import { Tenant, CreateTenantInput, UpdateTenantInput, ChatwootSetupStatus } from './tenant.model';
 import { encrypt } from '../../utils/crypto';
 
 export const tenantRepository = {
@@ -154,6 +154,19 @@ export const tenantRepository = {
     const { rows } = await pool.query<Tenant>(
       `UPDATE tenants SET status = 'inactive', updated_at = NOW() WHERE id = $1 RETURNING *`,
       [id]
+    );
+    return rows[0] || null;
+  },
+
+  async updateChatwootSetupStatus(
+    id: string,
+    status: ChatwootSetupStatus,
+    error: string | null = null
+  ): Promise<Tenant | null> {
+    const { rows } = await pool.query<Tenant>(
+      `UPDATE tenants SET chatwoot_setup_status = $1, chatwoot_setup_error = $2, updated_at = NOW()
+       WHERE id = $3 RETURNING *`,
+      [status, error, id]
     );
     return rows[0] || null;
   },

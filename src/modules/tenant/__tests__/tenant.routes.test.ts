@@ -13,6 +13,8 @@ const mockProvisioning = chatwootProvisioningService as jest.Mocked<typeof chatw
 
 const AUTH_HEADER = `Bearer test-admin-token`;
 
+import { env } from '../../../config/env';
+
 const mockPublicTenant = {
   id: 'uuid-1',
   slug: 'test-tenant',
@@ -22,6 +24,8 @@ const mockPublicTenant = {
   chatwoot_account_id: 1,
   chatwoot_inbox_id: 2,
   agent_timeout_seconds: 180,
+  chatwoot_setup_status: 'none' as const,
+  chatwoot_setup_error: null,
   status: 'active' as const,
   created_at: new Date('2024-01-01'),
   updated_at: new Date('2024-01-01'),
@@ -377,6 +381,143 @@ describe('tenant.routes integration', () => {
       expect(res.body.name).toBe('New Agent');
       expect(mockProvisioning.addAgentsToInbox).toHaveBeenCalledWith(
         expect.objectContaining({ agentIds: [10] })
+      );
+    });
+  });
+
+  describe('POST /api/tenants/:id/setup-chatwoot', () => {
+    it('returns 401 without auth token', async () => {
+      const res = await request(app).post('/api/tenants/uuid-1/setup-chatwoot');
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 404 when tenant not found', async () => {
+      mockService.getById.mockResolvedValue(null);
+
+      const res = await request(app)
+        .post('/api/tenants/nonexistent/setup-chatwoot')
+        .set('Authorization', AUTH_HEADER);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('Tenant not found');
+    });
+
+    it('returns 400 when Chatwoot is already configured', async () => {
+      mockService.getById.mockResolvedValue({
+        ...mockFullTenant,
+        chatwoot_account_id: 5,
+        chatwoot_api_token: 'existing-token',
+      } as any);
+
+      const res = await request(app)
+        .post('/api/tenants/uuid-1/setup-chatwoot')
+        .set('Authorization', AUTH_HEADER);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('already configured');
+    });
+
+    it('returns 400 when CHATWOOT_PLATFORM_TOKEN is not configured', async () => {
+      mockService.getById.mockResolvedValue({
+        ...mockFullTenant,
+        chatwoot_account_id: null,
+        chatwoot_api_token: null,
+      } as any);
+
+      const originalToken = env.CHATWOOT_PLATFORM_TOKEN;
+      (env as any).CHATWOOT_PLATFORM_TOKEN = '';
+
+      const res = await request(app)
+        .post('/api/tenants/uuid-1/setup-chatwoot')
+        .set('Authorization', AUTH_HEADER);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('CHATWOOT_PLATFORM_TOKEN');
+
+      (env as any).CHATWOOT_PLATFORM_TOKEN = originalToken;
+    });
+
+    it('returns 200 and starts provisioning when valid', async () => {
+      mockService.getById.mockResolvedValue({
+        ...mockFullTenant,
+        chatwoot_account_id: null,
+        chatwoot_api_token: null,
+      } as any);
+      mockService.provisionChatwoot.mockResolvedValue(undefined);
+
+      (env as any).CHATWOOT_PLATFORM_TOKEN = 'platform-test-token';
+
+      const res = await request(app)
+        .post('/api/tenants/uuid-1/setup-chatwoot')
+        .set('Authorization', AUTH_HEADER);
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe('Chatwoot setup started');
+      expect(res.body.status).toBe('pending');
+      expect(mockService.provisionChatwoot).toHaveBeenCalledWith(
+        'uuid-1', 'test-tenant', 'Test Firm'
+      );
+
+      (env as any).CHATWOOT_PLATFORM_TOKEN = '';
+    });
+
+    it('returns 200 even when provisioning rejects (fire-and-forget)', async () => {
+      mockService.getById.mockResolvedValue({
+        ...mockFullTenant,
+        chatwoot_account_id: null,
+        chatwoot_api_token: null,
+      } as any);
+      mockService.provisionChatwoot.mockRejectedValue(new Error('Chatwoot down'));
+
+      (env as any).CHATWOOT_PLATFORM_TOKEN = 'platform-test-token';
+
+      const res = await request(app)
+        .post('/api/tenants/uuid-1/setup-chatwoot')
+        .set('Authorization', AUTH_HEADER);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('pending');
+
+      (env as any).CHATWOOT_PLATFORM_TOKEN = '';
+    });
+  });
+
+  describe('POST /api/tenants with auto_setup_chatwoot', () => {
+    it('passes auto_setup_chatwoot to service create', async () => {
+      mockService.create.mockResolvedValue(mockPublicTenant as any);
+
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'auto-setup',
+          firm_name: 'Auto Setup Co',
+          auto_setup_chatwoot: true,
+        });
+
+      expect(res.status).toBe(201);
+      expect(mockService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ auto_setup_chatwoot: true })
+      );
+    });
+
+    it('passes auto_setup_chatwoot=false to service create', async () => {
+      mockService.create.mockResolvedValue(mockPublicTenant as any);
+
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'manual-setup',
+          firm_name: 'Manual Setup Co',
+          auto_setup_chatwoot: false,
+          chatwoot_account_id: 10,
+          chatwoot_api_token: 'manual-token',
+        });
+
+      expect(res.status).toBe(201);
+      expect(mockService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ auto_setup_chatwoot: false })
       );
     });
   });

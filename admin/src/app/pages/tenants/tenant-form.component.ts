@@ -150,20 +150,31 @@ const DAYS: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday
           <mat-card>
             <mat-card-header><mat-card-title>Chatwoot CRM</mat-card-title></mat-card-header>
             <mat-card-content>
-              <div class="form-row">
-                <mat-form-field appearance="outline">
-                  <mat-label>Account ID</mat-label>
-                  <input matInput formControlName="chatwoot_account_id" type="number">
+              @if (!isEdit()) {
+                <mat-checkbox [checked]="autoSetupChatwoot()"
+                              (change)="autoSetupChatwoot.set($event.checked)">
+                  Auto-setup Chatwoot account
+                </mat-checkbox>
+                <p class="hint" style="margin: 8px 0 16px;">
+                  {{ autoSetupChatwoot() ? 'A Chatwoot account, inbox and webhook will be created automatically.' : 'Enter Chatwoot credentials manually below.' }}
+                </p>
+              }
+              @if (isEdit() || !autoSetupChatwoot()) {
+                <div class="form-row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Account ID</mat-label>
+                    <input matInput formControlName="chatwoot_account_id" type="number">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Inbox ID</mat-label>
+                    <input matInput formControlName="chatwoot_inbox_id" type="number">
+                  </mat-form-field>
+                </div>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>API Token</mat-label>
+                  <input matInput formControlName="chatwoot_api_token" type="password">
                 </mat-form-field>
-                <mat-form-field appearance="outline">
-                  <mat-label>Inbox ID</mat-label>
-                  <input matInput formControlName="chatwoot_inbox_id" type="number">
-                </mat-form-field>
-              </div>
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>API Token</mat-label>
-                <input matInput formControlName="chatwoot_api_token" type="password">
-              </mat-form-field>
+              }
             </mat-card-content>
           </mat-card>
 
@@ -289,6 +300,7 @@ const DAYS: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday
       margin: 16px 0;
     }
     .center { display: flex; justify-content: center; padding: 32px; }
+    .hint { color: #999; font-style: italic; font-size: 13px; }
   `],
 })
 export class TenantFormComponent implements OnInit {
@@ -302,6 +314,7 @@ export class TenantFormComponent implements OnInit {
   formLoading = signal(false);
   saving = signal(false);
   hasExistingApiKey = signal(false);
+  autoSetupChatwoot = signal(true);
   tenantId = '';
   handoverKeywords: string[] = [];
   separatorKeyCodes = [ENTER, COMMA];
@@ -407,6 +420,11 @@ export class TenantFormComponent implements OnInit {
 
     // Remove undefined values
     Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+
+    // Add auto_setup_chatwoot flag in create mode
+    if (!this.isEdit()) {
+      payload['auto_setup_chatwoot'] = this.autoSetupChatwoot();
+    }
 
     if (this.isEdit()) {
       if (raw.status) payload['status'] = raw.status;

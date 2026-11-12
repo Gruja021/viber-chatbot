@@ -203,4 +203,24 @@ describe('TenantService', () => {
     expect(req.request.body).toEqual({ tenant_id: 'tenant-1', chat_id: '12345' });
     req.flush({ message: 'Test message sent' });
   });
+
+  // setupChatwoot
+  it('should POST to setup Chatwoot', () => {
+    const mockRes = { message: 'Chatwoot setup started', status: 'pending' };
+    service.setupChatwoot('tenant-1').subscribe((result) => {
+      expect(result.message).toBe('Chatwoot setup started');
+      expect(result.status).toBe('pending');
+    });
+    const req = httpTesting.expectOne('/api/tenants/tenant-1/setup-chatwoot');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({});
+    req.flush(mockRes);
+  });
+
+  it('should use correct URL for setupChatwoot', () => {
+    service.setupChatwoot('abc-123').subscribe();
+    const req = httpTesting.expectOne('/api/tenants/abc-123/setup-chatwoot');
+    expect(req.request.url).toBe('/api/tenants/abc-123/setup-chatwoot');
+    req.flush({ message: 'ok', status: 'pending' });
+  });
 });

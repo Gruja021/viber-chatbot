@@ -181,10 +181,10 @@ import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
         </mat-card>
 
         <!-- CRM -->
-        @if (tenant()!.chatwoot_account_id) {
-          <mat-card>
-            <mat-card-header><mat-card-title>Chatwoot CRM</mat-card-title></mat-card-header>
-            <mat-card-content>
+        <mat-card>
+          <mat-card-header><mat-card-title>Chatwoot CRM</mat-card-title></mat-card-header>
+          <mat-card-content>
+            @if (tenant()!.chatwoot_account_id) {
               <mat-list>
                 <mat-list-item>
                   <span matListItemTitle>Account ID</span>
@@ -203,14 +203,49 @@ import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
                   <span matListItemLine>{{ tenant()!.session_timeout_hours }}h</span>
                 </mat-list-item>
               </mat-list>
-            </mat-card-content>
-            <mat-card-actions>
+            }
+
+            <!-- Chatwoot Setup Status -->
+            @if (tenant()!.chatwoot_setup_status === 'pending') {
+              <div class="setup-status setup-pending">
+                <mat-spinner diameter="20"></mat-spinner>
+                <span>Chatwoot setup in progress...</span>
+              </div>
+            }
+            @if (tenant()!.chatwoot_setup_status === 'failed') {
+              <div class="setup-status setup-failed">
+                <mat-icon>error</mat-icon>
+                <span>Chatwoot setup failed: {{ tenant()!.chatwoot_setup_error }}</span>
+              </div>
+            }
+            @if (tenant()!.chatwoot_setup_status === 'completed' && tenant()!.chatwoot_account_id) {
+              <div class="setup-status setup-completed">
+                <mat-icon>check_circle</mat-icon>
+                <span>Chatwoot auto-provisioned successfully</span>
+              </div>
+            }
+            @if (!tenant()!.chatwoot_account_id && tenant()!.chatwoot_setup_status !== 'pending') {
+              <p class="hint">No Chatwoot configuration. Use the button below to auto-setup or configure manually via Edit.</p>
+            }
+          </mat-card-content>
+          <mat-card-actions>
+            @if (tenant()!.chatwoot_account_id) {
               <button mat-button [routerLink]="['/tenants', tenant()!.id, 'agents']">
                 <mat-icon>people</mat-icon> Manage Agents
               </button>
-            </mat-card-actions>
-          </mat-card>
-        }
+            }
+            @if (!tenant()!.chatwoot_account_id && tenant()!.chatwoot_setup_status !== 'pending') {
+              <button mat-button (click)="retryChatwootSetup()" [disabled]="chatwootSetupLoading()">
+                @if (chatwootSetupLoading()) {
+                  <mat-spinner diameter="18"></mat-spinner>
+                } @else {
+                  <mat-icon>refresh</mat-icon>
+                  {{ tenant()!.chatwoot_setup_status === 'failed' ? 'Retry Setup' : 'Setup Chatwoot' }}
+                }
+              </button>
+            }
+          </mat-card-actions>
+        </mat-card>
 
         <!-- Working Hours -->
         @if (hasWorkingHours()) {
@@ -282,6 +317,10 @@ import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
     .platform-heading { margin: 16px 0 8px; }
     .platform-heading:first-child { margin-top: 0; }
     .platform-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+    .setup-status { display: flex; align-items: center; gap: 8px; padding: 12px; border-radius: 4px; margin: 8px 0; }
+    .setup-pending { background: #fff3e0; color: #e65100; }
+    .setup-failed { background: #fbe9e7; color: #c62828; }
+    .setup-completed { background: #e8f5e9; color: #2e7d32; }
   `],
 })
 export class TenantDetailComponent implements OnInit {
@@ -296,6 +335,7 @@ export class TenantDetailComponent implements OnInit {
   healthLoading = signal(false);
   webhookLoading = signal(false);
   testMessageLoading = signal(false);
+  chatwootSetupLoading = signal(false);
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -405,6 +445,24 @@ export class TenantDetailComponent implements OnInit {
       error: () => {
         this.testMessageLoading.set(false);
         this.snackBar.open('Failed to send test message', 'OK', { duration: 3000 });
+      },
+    });
+  }
+
+  retryChatwootSetup(): void {
+    const id = this.tenant()?.id;
+    if (!id) return;
+
+    this.chatwootSetupLoading.set(true);
+    this.tenantService.setupChatwoot(id).subscribe({
+      next: () => {
+        this.chatwootSetupLoading.set(false);
+        this.snackBar.open('Chatwoot setup started. Reloading in 3s...', 'OK', { duration: 3000 });
+        setTimeout(() => this.loadTenant(id), 3000);
+      },
+      error: (err) => {
+        this.chatwootSetupLoading.set(false);
+        this.snackBar.open(err.error?.error || 'Failed to start Chatwoot setup', 'OK', { duration: 5000 });
       },
     });
   }

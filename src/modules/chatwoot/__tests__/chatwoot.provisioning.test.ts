@@ -317,6 +317,150 @@ describe('chatwootProvisioningService', () => {
     });
   });
 
+  describe('createAccount', () => {
+    it('creates account via Platform API', async () => {
+      mockAxios.post.mockResolvedValue({
+        data: { id: 5, name: 'Test Corp' },
+      });
+
+      const result = await chatwootProvisioningService.createAccount('platform-token', 'Test Corp');
+
+      expect(result).toEqual({ id: 5, name: 'Test Corp' });
+      expect(mockAxios.post).toHaveBeenCalledWith(
+        expect.stringContaining('/platform/api/v1/accounts'),
+        { name: 'Test Corp' },
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'api_access_token': 'platform-token' }),
+        })
+      );
+    });
+
+    it('throws on API error', async () => {
+      mockAxios.post.mockRejectedValue(new Error('Unauthorized'));
+
+      await expect(chatwootProvisioningService.createAccount('bad-token', 'Test')).rejects.toThrow('Unauthorized');
+    });
+  });
+
+  describe('createAccountUser', () => {
+    it('creates user and adds to account', async () => {
+      mockAxios.post
+        .mockResolvedValueOnce({
+          data: { id: 10, name: 'Admin', email: 'admin@test.com', access_token: 'user-token' },
+        })
+        .mockResolvedValueOnce({
+          data: {},
+        });
+
+      const result = await chatwootProvisioningService.createAccountUser('platform-token', 5, 'Admin', 'admin@test.com');
+
+      expect(result).toEqual({
+        id: 10,
+        name: 'Admin',
+        email: 'admin@test.com',
+        access_token: 'user-token',
+      });
+
+      expect(mockAxios.post).toHaveBeenCalledTimes(2);
+      // First call: create user
+      expect(mockAxios.post).toHaveBeenNthCalledWith(1,
+        expect.stringContaining('/platform/api/v1/users'),
+        expect.objectContaining({ name: 'Admin', email: 'admin@test.com' }),
+        expect.any(Object)
+      );
+      // Second call: add user to account
+      expect(mockAxios.post).toHaveBeenNthCalledWith(2,
+        expect.stringContaining('/platform/api/v1/accounts/5/account_users'),
+        expect.objectContaining({ user_id: 10, role: 'administrator' }),
+        expect.any(Object)
+      );
+    });
+
+    it('throws on API error', async () => {
+      mockAxios.post.mockRejectedValue(new Error('User exists'));
+
+      await expect(
+        chatwootProvisioningService.createAccountUser('platform-token', 5, 'Admin', 'admin@test.com')
+      ).rejects.toThrow('User exists');
+    });
+  });
+
+  describe('setupWebhook', () => {
+    it('creates webhook for account', async () => {
+      mockAxios.post.mockResolvedValue({ data: { id: 1 } });
+
+      await chatwootProvisioningService.setupWebhook({
+        chatwootApiToken: 'user-token',
+        chatwootAccountId: 5,
+        webhookUrl: 'https://example.com/api/chatwoot/webhook',
+      });
+
+      expect(mockAxios.post).toHaveBeenCalledWith(
+        expect.stringContaining('/accounts/5/webhooks'),
+        expect.objectContaining({
+          url: 'https://example.com/api/chatwoot/webhook',
+          subscriptions: ['message_created', 'conversation_status_changed'],
+        }),
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'api_access_token': 'user-token' }),
+        })
+      );
+    });
+
+    it('throws on API error', async () => {
+      mockAxios.post.mockRejectedValue(new Error('Invalid URL'));
+
+      await expect(chatwootProvisioningService.setupWebhook({
+        chatwootApiToken: 'token',
+        chatwootAccountId: 5,
+        webhookUrl: 'bad-url',
+      })).rejects.toThrow('Invalid URL');
+    });
+  });
+
+  describe('provisionFullAccount', () => {
+    it('orchestrates full account creation', async () => {
+      // createAccount
+      mockAxios.post.mockResolvedValueOnce({ data: { id: 5, name: 'Test Corp' } });
+      // createAccountUser - create user
+      mockAxios.post.mockResolvedValueOnce({
+        data: { id: 10, name: 'Admin', email: 'admin@test.com', access_token: 'at-123' },
+      });
+      // createAccountUser - add to account
+      mockAxios.post.mockResolvedValueOnce({ data: {} });
+      // createInbox
+      mockAxios.post.mockResolvedValueOnce({ data: { id: 20, name: 'Test Inbox', channel_type: 'api' } });
+      // setupWebhook
+      mockAxios.post.mockResolvedValueOnce({ data: { id: 1 } });
+
+      const result = await chatwootProvisioningService.provisionFullAccount({
+        platformToken: 'platform-token',
+        tenantSlug: 'test-corp',
+        firmName: 'Test Corp',
+        webhookBaseUrl: 'https://example.com',
+      });
+
+      expect(result).toEqual({
+        chatwoot_account_id: 5,
+        chatwoot_inbox_id: 20,
+        chatwoot_api_token: 'at-123',
+      });
+
+      expect(mockAxios.post).toHaveBeenCalledTimes(5);
+    });
+
+    it('throws if account creation fails', async () => {
+      mockAxios.post.mockRejectedValue(new Error('Chatwoot down'));
+
+      await expect(chatwootProvisioningService.provisionFullAccount({
+        platformToken: 'platform-token',
+        tenantSlug: 'test',
+        firmName: 'Test',
+        webhookBaseUrl: 'https://example.com',
+      })).rejects.toThrow('Chatwoot down');
+    });
+  });
+
   describe('listAgents', () => {
     it('returns list of agents', async () => {
       const agents = [

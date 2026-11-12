@@ -45,6 +45,7 @@ services:
       WEBHOOK_BASE_URL: ${WEBHOOK_BASE_URL:-http://localhost:3000}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       CHATWOOT_BASE_URL: http://chatwoot-rails:3000
+      CHATWOOT_PLATFORM_TOKEN: ${CHATWOOT_PLATFORM_TOKEN:-}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
       interval: 5s

@@ -32,6 +32,8 @@ function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     handover_keywords: [],
     agent_timeout_seconds: 180,
     session_timeout_hours: 24,
+    chatwoot_setup_status: 'none',
+    chatwoot_setup_error: null,
     status: 'active',
     created_at: new Date(),
     updated_at: new Date(),

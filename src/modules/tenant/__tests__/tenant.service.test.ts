@@ -1,11 +1,15 @@
 import { tenantService } from '../tenant.service';
 import { tenantRepository } from '../tenant.repository';
 import { redis } from '../../../config/redis';
+import { env } from '../../../config/env';
+import { chatwootProvisioningService } from '../../chatwoot/chatwoot.provisioning';
 import { Tenant } from '../tenant.model';
 
 jest.mock('../tenant.repository');
+jest.mock('../../chatwoot/chatwoot.provisioning');
 const mockRepo = tenantRepository as jest.Mocked<typeof tenantRepository>;
 const mockRedis = redis as jest.Mocked<typeof redis>;
+const mockChatwoot = chatwootProvisioningService as jest.Mocked<typeof chatwootProvisioningService>;
 
 const makeTenant = (overrides: Partial<Tenant> = {}): Tenant => ({
   id: 'uuid-1',
@@ -26,6 +30,8 @@ const makeTenant = (overrides: Partial<Tenant> = {}): Tenant => ({
   handover_keywords: [],
   agent_timeout_seconds: 180,
   session_timeout_hours: 24,
+  chatwoot_setup_status: 'none',
+  chatwoot_setup_error: null,
   status: 'active',
   created_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
   updated_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
@@ -278,6 +284,159 @@ describe('tenantService', () => {
       mockRepo.findById.mockResolvedValue(null);
       const result = await tenantService.deactivate('nonexistent');
       expect(result).toBeNull();
+    });
+  });
+
+  describe('toPublic - chatwoot_setup_status', () => {
+    it('includes chatwoot_setup_status in public tenant', async () => {
+      const tenant = makeTenant({ chatwoot_setup_status: 'completed' });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X', auto_setup_chatwoot: false });
+      expect(result).toHaveProperty('chatwoot_setup_status', 'completed');
+    });
+
+    it('includes chatwoot_setup_error in public tenant', async () => {
+      const tenant = makeTenant({ chatwoot_setup_status: 'failed', chatwoot_setup_error: 'Connection refused' });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X', auto_setup_chatwoot: false });
+      expect(result).toHaveProperty('chatwoot_setup_error', 'Connection refused');
+    });
+
+    it('defaults chatwoot_setup_status to none when null', async () => {
+      const tenant = makeTenant({ chatwoot_setup_status: undefined as any });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X', auto_setup_chatwoot: false });
+      expect(result).toHaveProperty('chatwoot_setup_status', 'none');
+    });
+  });
+
+  describe('create - auto provisioning', () => {
+    it('triggers async provisioning when auto_setup_chatwoot is true and platform token exists', async () => {
+      const tenant = makeTenant({ chatwoot_account_id: null, chatwoot_api_token: null });
+      mockRepo.create.mockResolvedValue(tenant);
+      mockChatwoot.provisionFullAccount.mockResolvedValue({
+        chatwoot_account_id: 5,
+        chatwoot_inbox_id: 10,
+        chatwoot_api_token: 'new-token',
+      });
+      mockRepo.updateChatwootSetupStatus.mockResolvedValue(tenant);
+      mockRepo.update.mockResolvedValue(tenant);
+      mockRepo.findById.mockResolvedValue(tenant);
+
+      // Set platform token
+      (env as any).CHATWOOT_PLATFORM_TOKEN = 'platform-test-token';
+
+      const result = await tenantService.create({
+        slug: 'test-tenant',
+        firm_name: 'Test Firm',
+        auto_setup_chatwoot: true,
+      });
+
+      expect(result).toHaveProperty('chatwoot_setup_status', 'pending');
+
+      // Cleanup
+      (env as any).CHATWOOT_PLATFORM_TOKEN = '';
+    });
+
+    it('does not trigger provisioning when chatwoot_account_id is provided', async () => {
+      const tenant = makeTenant();
+      mockRepo.create.mockResolvedValue(tenant);
+
+      (env as any).CHATWOOT_PLATFORM_TOKEN = 'platform-test-token';
+
+      await tenantService.create({
+        slug: 'test-tenant',
+        firm_name: 'Test Firm',
+        chatwoot_account_id: 99,
+      });
+
+      expect(mockChatwoot.provisionFullAccount).not.toHaveBeenCalled();
+
+      (env as any).CHATWOOT_PLATFORM_TOKEN = '';
+    });
+
+    it('does not trigger provisioning when platform token is empty', async () => {
+      const tenant = makeTenant({ chatwoot_account_id: null, chatwoot_api_token: null });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      (env as any).CHATWOOT_PLATFORM_TOKEN = '';
+
+      await tenantService.create({
+        slug: 'test-tenant',
+        firm_name: 'Test Firm',
+        auto_setup_chatwoot: true,
+      });
+
+      expect(mockChatwoot.provisionFullAccount).not.toHaveBeenCalled();
+    });
+
+    it('does not trigger provisioning when auto_setup_chatwoot is false', async () => {
+      const tenant = makeTenant({ chatwoot_account_id: null, chatwoot_api_token: null });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      (env as any).CHATWOOT_PLATFORM_TOKEN = 'platform-test-token';
+
+      await tenantService.create({
+        slug: 'test-tenant',
+        firm_name: 'Test Firm',
+        auto_setup_chatwoot: false,
+      });
+
+      expect(mockChatwoot.provisionFullAccount).not.toHaveBeenCalled();
+
+      (env as any).CHATWOOT_PLATFORM_TOKEN = '';
+    });
+  });
+
+  describe('provisionChatwoot', () => {
+    it('provisions and updates tenant on success', async () => {
+      const tenant = makeTenant();
+      mockChatwoot.provisionFullAccount.mockResolvedValue({
+        chatwoot_account_id: 5,
+        chatwoot_inbox_id: 10,
+        chatwoot_api_token: 'new-token',
+      });
+      mockRepo.updateChatwootSetupStatus.mockResolvedValue(tenant);
+      mockRepo.update.mockResolvedValue(tenant);
+      mockRepo.findById.mockResolvedValue(tenant);
+
+      (env as any).CHATWOOT_PLATFORM_TOKEN = 'platform-token';
+      (env as any).WEBHOOK_BASE_URL = 'https://example.com';
+
+      await tenantService.provisionChatwoot('uuid-1', 'test-tenant', 'Test Firm');
+
+      expect(mockRepo.updateChatwootSetupStatus).toHaveBeenCalledWith('uuid-1', 'pending');
+      expect(mockChatwoot.provisionFullAccount).toHaveBeenCalledWith({
+        platformToken: 'platform-token',
+        tenantSlug: 'test-tenant',
+        firmName: 'Test Firm',
+        webhookBaseUrl: 'https://example.com',
+      });
+      expect(mockRepo.update).toHaveBeenCalledWith('uuid-1', {
+        chatwoot_account_id: 5,
+        chatwoot_inbox_id: 10,
+        chatwoot_api_token: 'new-token',
+      });
+      expect(mockRepo.updateChatwootSetupStatus).toHaveBeenCalledWith('uuid-1', 'completed');
+
+      (env as any).CHATWOOT_PLATFORM_TOKEN = '';
+    });
+
+    it('sets failed status on error', async () => {
+      mockChatwoot.provisionFullAccount.mockRejectedValue(new Error('Connection refused'));
+      mockRepo.updateChatwootSetupStatus.mockResolvedValue(makeTenant());
+
+      (env as any).CHATWOOT_PLATFORM_TOKEN = 'platform-token';
+      (env as any).WEBHOOK_BASE_URL = 'https://example.com';
+
+      await tenantService.provisionChatwoot('uuid-1', 'test-tenant', 'Test Firm');
+
+      expect(mockRepo.updateChatwootSetupStatus).toHaveBeenCalledWith('uuid-1', 'failed', 'Connection refused');
+
+      (env as any).CHATWOOT_PLATFORM_TOKEN = '';
     });
   });
 });

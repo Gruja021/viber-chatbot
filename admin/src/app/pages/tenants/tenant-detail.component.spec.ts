@@ -480,6 +480,178 @@ describe('TenantDetailComponent', () => {
     expect(component.testMessageLoading()).toBeFalse();
   });
 
+  // Chatwoot setup status tests
+  it('should show pending status with spinner', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ chatwoot_setup_status: 'pending', chatwoot_account_id: null })
+    );
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('setup in progress');
+  });
+
+  it('should show failed status with error message', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ chatwoot_setup_status: 'failed', chatwoot_setup_error: 'Connection refused', chatwoot_account_id: null })
+    );
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('setup failed');
+    expect(compiled.textContent).toContain('Connection refused');
+    expect(compiled.textContent).toContain('Retry Setup');
+  });
+
+  it('should show completed status when auto-provisioned', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ chatwoot_setup_status: 'completed', chatwoot_account_id: 5 })
+    );
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('auto-provisioned successfully');
+  });
+
+  it('should show Setup Chatwoot button when no config and status is none', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ chatwoot_setup_status: 'none', chatwoot_account_id: null })
+    );
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Setup Chatwoot');
+  });
+
+  it('should call setupChatwoot on retry click', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ chatwoot_setup_status: 'failed', chatwoot_account_id: null })
+    );
+
+    component.retryChatwootSetup();
+    expect(component.chatwootSetupLoading()).toBeTrue();
+
+    httpTesting.expectOne('/api/tenants/tenant-1/setup-chatwoot').flush({
+      message: 'Chatwoot setup started',
+      status: 'pending',
+    });
+
+    expect(component.chatwootSetupLoading()).toBeFalse();
+    expect(snackBar.open).toHaveBeenCalledWith(
+      jasmine.stringContaining('Chatwoot setup started'),
+      'OK',
+      jasmine.any(Object)
+    );
+  });
+
+  it('should show error on retry failure', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ chatwoot_setup_status: 'failed', chatwoot_account_id: null })
+    );
+
+    component.retryChatwootSetup();
+    httpTesting.expectOne('/api/tenants/tenant-1/setup-chatwoot').flush(
+      { error: 'CHATWOOT_PLATFORM_TOKEN is not configured' },
+      { status: 400, statusText: 'Bad Request' }
+    );
+
+    expect(component.chatwootSetupLoading()).toBeFalse();
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'CHATWOOT_PLATFORM_TOKEN is not configured',
+      'OK',
+      jasmine.any(Object)
+    );
+  });
+
+  it('should not retry without tenant', () => {
+    setup(null);
+    fixture.detectChanges();
+    component.retryChatwootSetup();
+    httpTesting.expectNone('/api/tenants/null/setup-chatwoot');
+  });
+
+  it('should show CRM card even without chatwoot_account_id', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ chatwoot_account_id: null, chatwoot_setup_status: 'none' })
+    );
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Chatwoot CRM');
+  });
+
+  it('should not show Manage Agents when chatwoot_account_id is null', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ chatwoot_account_id: null, chatwoot_setup_status: 'none' })
+    );
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).not.toContain('Manage Agents');
+  });
+
+  it('should not show setup button when status is pending', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ chatwoot_account_id: null, chatwoot_setup_status: 'pending' })
+    );
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).not.toContain('Setup Chatwoot');
+    expect(compiled.textContent).not.toContain('Retry Setup');
+  });
+
+  it('should show hint text when no chatwoot config and not pending', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ chatwoot_account_id: null, chatwoot_setup_status: 'none' })
+    );
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('No Chatwoot configuration');
+  });
+
+  it('should show fallback error message when retry error has no nested error', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ chatwoot_setup_status: 'failed', chatwoot_account_id: null })
+    );
+
+    component.retryChatwootSetup();
+    httpTesting.expectOne('/api/tenants/tenant-1/setup-chatwoot').flush(
+      'Server Error',
+      { status: 500, statusText: 'Internal Server Error' }
+    );
+
+    expect(component.chatwootSetupLoading()).toBeFalse();
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'Failed to start Chatwoot setup',
+      'OK',
+      jasmine.any(Object)
+    );
+  });
+
   it('should show Manage Connectors link in Data Sources section', () => {
     setup();
     fixture.detectChanges();

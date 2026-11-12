@@ -72,4 +72,11 @@ export class TenantService {
       { tenant_id: tenantId, chat_id: chatId }
     );
   }
+
+  setupChatwoot(tenantId: string): Observable<{ message: string; status: string }> {
+    return this.http.post<{ message: string; status: string }>(
+      `${this.baseUrl}/api/tenants/${tenantId}/setup-chatwoot`,
+      {}
+    );
+  }
 }

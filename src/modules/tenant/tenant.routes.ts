@@ -102,6 +102,35 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
   }
 });
 
+// --- Chatwoot auto-provisioning retry ---
+
+router.post('/:id/setup-chatwoot', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenant = await tenantService.getById(req.params.id as string);
+    if (!tenant) {
+      res.status(404).json({ error: 'Tenant not found' });
+      return;
+    }
+
+    if (tenant.chatwoot_account_id && tenant.chatwoot_api_token) {
+      res.status(400).json({ error: 'Chatwoot is already configured for this tenant' });
+      return;
+    }
+
+    if (!env.CHATWOOT_PLATFORM_TOKEN) {
+      res.status(400).json({ error: 'CHATWOOT_PLATFORM_TOKEN is not configured' });
+      return;
+    }
+
+    // Fire-and-forget provisioning
+    tenantService.provisionChatwoot(tenant.id, tenant.slug, tenant.firm_name).catch(() => {});
+
+    res.json({ message: 'Chatwoot setup started', status: 'pending' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // --- Agent management routes (proxy to Chatwoot) ---
 
 router.get('/:id/agents', async (req: Request, res: Response, next: NextFunction) => {

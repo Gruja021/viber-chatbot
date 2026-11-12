@@ -45,3 +45,29 @@ export interface ChatwootAddAgentToInboxOptions {
   inboxId: number;
   agentIds: number[];
 }
+
+// --- Platform API types (super admin) ---
+
+export interface ChatwootCreateAccountResult {
+  id: number;
+  name: string;
+}
+
+export interface ChatwootCreateAccountUserResult {
+  id: number;
+  name: string;
+  email: string;
+  access_token: string;
+}
+
+export interface ChatwootSetupWebhookOptions {
+  chatwootApiToken: string;
+  chatwootAccountId: number;
+  webhookUrl: string;
+}
+
+export interface ChatwootProvisionResult {
+  chatwoot_account_id: number;
+  chatwoot_inbox_id: number;
+  chatwoot_api_token: string;
+}
