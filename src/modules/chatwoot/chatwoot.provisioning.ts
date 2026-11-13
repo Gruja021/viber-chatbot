@@ -323,10 +323,29 @@ export const chatwootProvisioningService = {
 };
 
 function generateRandomPassword(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%';
-  let password = '';
-  for (let i = 0; i < 24; i++) {
-    password += chars[Math.floor(Math.random() * chars.length)];
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const digits = '0123456789';
+  const special = '!@#$%^&*()_+-=';
+  const all = lower + upper + digits + special;
+
+  // Guarantee at least one from each category
+  const chars = [
+    lower[Math.floor(Math.random() * lower.length)],
+    upper[Math.floor(Math.random() * upper.length)],
+    digits[Math.floor(Math.random() * digits.length)],
+    special[Math.floor(Math.random() * special.length)],
+  ];
+
+  for (let i = chars.length; i < 24; i++) {
+    chars.push(all[Math.floor(Math.random() * all.length)]);
   }
-  return password;
+
+  // Shuffle
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+
+  return chars.join('');
 }
