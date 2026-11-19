@@ -1,28 +1,43 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { tenantResolver } from '../../middleware/tenant-resolver';
+import { adminAuth } from '../../middleware/admin-auth';
 import { handleTelegramWebhook } from './telegram.controller';
-import { telegramService } from './telegram.service';
+import { telegramService, verifyTelegramWebhookSecret } from './telegram.service';
 import { tenantService } from '../tenant/tenant.service';
 import { env } from '../../config/env';
+import { logger } from '../../config/logger';
 
 const router = Router();
+
+// Telegram webhook secret token verification middleware
+function telegramSecretAuth(req: Request, res: Response, next: NextFunction): void {
+  const tenant = req.tenant;
+  if (!tenant?.telegram_bot_token) {
+    next();
+    return;
+  }
+
+  const secretHeader = req.headers['x-telegram-bot-api-secret-token'] as string | undefined;
+  if (!verifyTelegramWebhookSecret(tenant.telegram_bot_token, secretHeader)) {
+    logger.warn({ tenantSlug: tenant.slug }, 'Invalid Telegram webhook secret token');
+    res.status(401).json({ error: 'Invalid secret token' });
+    return;
+  }
+
+  next();
+}
 
 // Telegram webhook — parametrized by tenant slug
 router.post(
   '/webhook/:tenantSlug',
   tenantResolver,
+  telegramSecretAuth,
   handleTelegramWebhook
 );
 
 // Register Telegram webhook URL for a tenant (admin only)
-router.post('/register-webhook', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/register-webhook', adminAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token || token !== env.ADMIN_API_TOKEN) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
-
     const { tenant_id } = req.body;
     if (!tenant_id) {
       res.status(400).json({ error: 'tenant_id is required' });
@@ -50,14 +65,8 @@ router.post('/register-webhook', async (req: Request, res: Response, next: NextF
 });
 
 // Send test message to a Telegram chat (admin only)
-router.post('/test-message', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/test-message', adminAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token || token !== env.ADMIN_API_TOKEN) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
-
     const { tenant_id, chat_id } = req.body;
     if (!tenant_id || !chat_id) {
       res.status(400).json({ error: 'tenant_id and chat_id are required' });

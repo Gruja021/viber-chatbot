@@ -3,18 +3,9 @@ import { tenantService } from './tenant.service';
 import { checkTenantHealth } from './tenant.health';
 import { chatwootProvisioningService } from '../chatwoot/chatwoot.provisioning';
 import { env } from '../../config/env';
+import { adminAuth } from '../../middleware/admin-auth';
 
 const router = Router();
-
-// Admin auth middleware
-function adminAuth(req: Request, res: Response, next: NextFunction) {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token || token !== env.ADMIN_API_TOKEN) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
-  }
-  next();
-}
 
 router.use(adminAuth);
 
@@ -50,14 +41,63 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
+/** Validate tenant input fields. Returns error message or null if valid. */
+function validateTenantInput(body: Record<string, unknown>, isCreate: boolean): string | null {
+  // Slug validation
+  if (isCreate || body.slug !== undefined) {
+    const slug = body.slug;
+    if (isCreate && !slug) return 'slug is required';
+    if (slug && (typeof slug !== 'string' || !/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(slug))) {
+      return 'slug must be 3-64 chars, lowercase alphanumeric and hyphens, cannot start/end with hyphen';
+    }
+  }
+
+  if (isCreate && !body.firm_name) return 'firm_name is required';
+  if (body.firm_name !== undefined && (typeof body.firm_name !== 'string' || body.firm_name.length > 200)) {
+    return 'firm_name must be a string with max 200 characters';
+  }
+
+  // Timeout bounds
+  if (body.agent_timeout_seconds !== undefined) {
+    const val = Number(body.agent_timeout_seconds);
+    if (isNaN(val) || val < 0 || val > 86400) {
+      return 'agent_timeout_seconds must be between 0 and 86400';
+    }
+  }
+  if (body.session_timeout_hours !== undefined) {
+    const val = Number(body.session_timeout_hours);
+    if (isNaN(val) || val < 1 || val > 720) {
+      return 'session_timeout_hours must be between 1 and 720';
+    }
+  }
+
+  // System prompt length
+  if (body.system_prompt !== undefined) {
+    if (typeof body.system_prompt !== 'string' || body.system_prompt.length > 10000) {
+      return 'system_prompt must be a string with max 10000 characters';
+    }
+  }
+
+  // Timezone (basic IANA-like validation)
+  if (body.timezone !== undefined) {
+    if (typeof body.timezone !== 'string' || !/^[A-Za-z_]+\/[A-Za-z_]+/.test(body.timezone as string)) {
+      return 'timezone must be a valid IANA timezone (e.g., Europe/Belgrade)';
+    }
+  }
+
+  return null;
+}
+
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = { ...req.body };
-    const { slug, firm_name } = body;
-    if (!slug || !firm_name) {
-      res.status(400).json({ error: 'slug and firm_name are required' });
+
+    const validationError = validateTenantInput(body, true);
+    if (validationError) {
+      res.status(400).json({ error: validationError });
       return;
     }
+
     if (body.database_credentials && typeof body.database_credentials === 'object') {
       body.database_credentials = JSON.stringify(body.database_credentials);
     }
@@ -75,6 +115,13 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = { ...req.body };
+
+    const validationError = validateTenantInput(body, false);
+    if (validationError) {
+      res.status(400).json({ error: validationError });
+      return;
+    }
+
     if (body.database_credentials && typeof body.database_credentials === 'object') {
       body.database_credentials = JSON.stringify(body.database_credentials);
     }

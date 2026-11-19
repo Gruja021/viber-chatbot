@@ -44,32 +44,34 @@ describe('tenantService', () => {
   });
 
   describe('getBySlug', () => {
-    it('returns cached tenant on cache hit', async () => {
+    it('always fetches from DB (sensitive data not cached)', async () => {
       const tenant = makeTenant();
-      mockRedis.get.mockResolvedValue(JSON.stringify(tenant));
-
-      const result = await tenantService.getBySlug('test-tenant');
-      expect(result).toEqual(tenant);
-      expect(mockRepo.findBySlug).not.toHaveBeenCalled();
-    });
-
-    it('fetches from DB and caches on cache miss', async () => {
-      const tenant = makeTenant();
-      mockRedis.get.mockResolvedValue(null);
       mockRepo.findBySlug.mockResolvedValue(tenant);
 
       const result = await tenantService.getBySlug('test-tenant');
       expect(result).toEqual(tenant);
       expect(mockRepo.findBySlug).toHaveBeenCalledWith('test-tenant');
+    });
+
+    it('caches non-sensitive data after DB fetch', async () => {
+      const tenant = makeTenant();
+      mockRepo.findBySlug.mockResolvedValue(tenant);
+
+      await tenantService.getBySlug('test-tenant');
       expect(mockRedis.setex).toHaveBeenCalledWith(
         'tenant:slug:test-tenant',
         300,
-        JSON.stringify(tenant)
+        expect.any(String)
       );
+      // Cached data should NOT contain sensitive tokens
+      const cachedJson = (mockRedis.setex as jest.Mock).mock.calls[0][2];
+      const cached = JSON.parse(cachedJson);
+      expect(cached).not.toHaveProperty('viber_auth_token');
+      expect(cached).not.toHaveProperty('chatwoot_api_token');
+      expect(cached).not.toHaveProperty('openai_api_key');
     });
 
     it('returns null when tenant not in DB', async () => {
-      mockRedis.get.mockResolvedValue(null);
       mockRepo.findBySlug.mockResolvedValue(null);
 
       const result = await tenantService.getBySlug('nonexistent');
@@ -79,26 +81,26 @@ describe('tenantService', () => {
   });
 
   describe('getById', () => {
-    it('returns cached tenant on cache hit', async () => {
-      const tenant = makeTenant();
-      mockRedis.get.mockResolvedValue(JSON.stringify(tenant));
-
-      const result = await tenantService.getById('uuid-1');
-      expect(result).toEqual(tenant);
-      expect(mockRepo.findById).not.toHaveBeenCalled();
-    });
-
-    it('fetches from DB and caches on cache miss', async () => {
+    it('always fetches from DB for full tenant data', async () => {
       const tenant = makeTenant();
       mockRedis.get.mockResolvedValue(null);
       mockRepo.findById.mockResolvedValue(tenant);
 
       const result = await tenantService.getById('uuid-1');
       expect(result).toEqual(tenant);
+      expect(mockRepo.findById).toHaveBeenCalledWith('uuid-1');
+    });
+
+    it('caches non-sensitive data after DB fetch', async () => {
+      const tenant = makeTenant();
+      mockRedis.get.mockResolvedValue(null);
+      mockRepo.findById.mockResolvedValue(tenant);
+
+      await tenantService.getById('uuid-1');
       expect(mockRedis.setex).toHaveBeenCalledWith(
         'tenant:id:uuid-1',
         300,
-        JSON.stringify(tenant)
+        expect.any(String)
       );
     });
   });

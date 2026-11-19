@@ -66,9 +66,8 @@ async function checkChatwoot(tenant: Tenant): Promise<HealthCheckResult> {
   try {
     // Try to search contacts as a lightweight API check
     const axios = (await import('axios')).default;
-    const baseUrl = process.env.CHATWOOT_BASE_URL || 'http://localhost:3000';
     await axios.get(
-      `${baseUrl}/api/v1/accounts/${tenant.chatwoot_account_id}/inboxes/${tenant.chatwoot_inbox_id}`,
+      `${env.CHATWOOT_BASE_URL}/api/v1/accounts/${tenant.chatwoot_account_id}/inboxes/${tenant.chatwoot_inbox_id}`,
       {
         headers: { 'api_access_token': tenant.chatwoot_api_token },
       }

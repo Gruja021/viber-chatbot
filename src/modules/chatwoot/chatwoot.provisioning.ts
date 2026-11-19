@@ -1,5 +1,7 @@
+import crypto from 'crypto';
 import axios from 'axios';
 import { logger } from '../../config/logger';
+import { env } from '../../config/env';
 import {
   ChatwootCreateInboxOptions,
   ChatwootCreateInboxResult,
@@ -10,7 +12,7 @@ import {
   ChatwootProvisionResult,
 } from './chatwoot.types';
 
-const CHATWOOT_BASE_URL = process.env.CHATWOOT_BASE_URL || 'http://localhost:3000';
+const CHATWOOT_BASE_URL = env.CHATWOOT_BASE_URL;
 
 export interface ChatwootAgent {
   id: number;
@@ -329,21 +331,21 @@ function generateRandomPassword(): string {
   const special = '!@#$%^&*()_+-=';
   const all = lower + upper + digits + special;
 
-  // Guarantee at least one from each category
+  // Guarantee at least one from each category (using crypto-safe random)
   const chars = [
-    lower[Math.floor(Math.random() * lower.length)],
-    upper[Math.floor(Math.random() * upper.length)],
-    digits[Math.floor(Math.random() * digits.length)],
-    special[Math.floor(Math.random() * special.length)],
+    lower[crypto.randomInt(lower.length)],
+    upper[crypto.randomInt(upper.length)],
+    digits[crypto.randomInt(digits.length)],
+    special[crypto.randomInt(special.length)],
   ];
 
   for (let i = chars.length; i < 24; i++) {
-    chars.push(all[Math.floor(Math.random() * all.length)]);
+    chars.push(all[crypto.randomInt(all.length)]);
   }
 
-  // Shuffle
+  // Fisher-Yates shuffle with crypto-safe random
   for (let i = chars.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = crypto.randomInt(i + 1);
     [chars[i], chars[j]] = [chars[j], chars[i]];
   }
 

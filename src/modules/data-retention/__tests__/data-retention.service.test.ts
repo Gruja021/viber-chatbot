@@ -126,7 +126,7 @@ describe('data-retention.service', () => {
       expect(result.messagesDeleted).toBe(0);
     });
 
-    it('uses correct SQL with 30-day interval for messages', async () => {
+    it('uses correct SQL with parameterized interval for messages', async () => {
       (mockPool.query as jest.Mock)
         .mockResolvedValueOnce({ rowCount: 0, rows: [] }) // messages
         .mockResolvedValueOnce({ rows: [] }); // conversations
@@ -134,12 +134,12 @@ describe('data-retention.service', () => {
       await dataRetentionService.runCleanup();
 
       const firstCall = (mockPool.query as jest.Mock).mock.calls[0];
-      expect(firstCall[0]).toContain("INTERVAL '30 days'");
+      expect(firstCall[0]).toContain("$1::integer * INTERVAL '1 day'");
       expect(firstCall[0]).toContain('DELETE FROM messages');
-      expect(firstCall[1]).toEqual([500]); // BATCH_SIZE
+      expect(firstCall[1]).toEqual([30, 500]); // MESSAGE_RETENTION_DAYS, BATCH_SIZE
     });
 
-    it('uses correct SQL with 90-day interval and closed status for conversations', async () => {
+    it('uses correct SQL with parameterized interval and closed status for conversations', async () => {
       (mockPool.query as jest.Mock)
         .mockResolvedValueOnce({ rowCount: 0, rows: [] }) // messages
         .mockResolvedValueOnce({ rows: [] }); // conversations SELECT
@@ -148,8 +148,8 @@ describe('data-retention.service', () => {
 
       const secondCall = (mockPool.query as jest.Mock).mock.calls[1];
       expect(secondCall[0]).toContain("conversation_status = 'closed'");
-      expect(secondCall[0]).toContain("INTERVAL '90 days'");
-      expect(secondCall[1]).toEqual([500]); // BATCH_SIZE
+      expect(secondCall[0]).toContain("$1::integer * INTERVAL '1 day'");
+      expect(secondCall[1]).toEqual([90, 500]); // CONVERSATION_RETENTION_DAYS, BATCH_SIZE
     });
 
     it('deletes conversations using ANY($1) with correct IDs', async () => {

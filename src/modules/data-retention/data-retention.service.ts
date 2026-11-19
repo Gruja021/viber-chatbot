@@ -22,10 +22,10 @@ async function deleteOldMessages(): Promise<number> {
     const result = await pool.query(
       `DELETE FROM messages WHERE id IN (
         SELECT id FROM messages
-        WHERE created_at < NOW() - INTERVAL '${MESSAGE_RETENTION_DAYS} days'
-        LIMIT $1
+        WHERE created_at < NOW() - $1::integer * INTERVAL '1 day'
+        LIMIT $2
       )`,
-      [BATCH_SIZE]
+      [MESSAGE_RETENTION_DAYS, BATCH_SIZE]
     );
 
     const deleted = result.rowCount ?? 0;
@@ -65,9 +65,9 @@ async function deleteOldConversations(): Promise<{ conversationsDeleted: number;
     const selectResult = await pool.query(
       `SELECT id FROM conversations
        WHERE conversation_status = 'closed'
-         AND updated_at < NOW() - INTERVAL '${CONVERSATION_RETENTION_DAYS} days'
-       LIMIT $1`,
-      [BATCH_SIZE]
+         AND updated_at < NOW() - $1::integer * INTERVAL '1 day'
+       LIMIT $2`,
+      [CONVERSATION_RETENTION_DAYS, BATCH_SIZE]
     );
 
     const ids: string[] = selectResult.rows.map((r: { id: string }) => r.id);

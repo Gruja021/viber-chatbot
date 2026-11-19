@@ -398,11 +398,25 @@ describe('webhook.routes integration', () => {
   });
 
   describe('GET /health', () => {
-    it('returns 200 when all services are healthy', async () => {
+    it('returns 200 with minimal info when no auth token', async () => {
       mockCheckDb.mockResolvedValue(true);
       mockCheckRedis.mockResolvedValue(true);
 
       const res = await request(app).get('/health');
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('ok');
+      // Without admin auth, details should be hidden
+      expect(res.body).not.toHaveProperty('database');
+      expect(res.body).not.toHaveProperty('redis');
+    });
+
+    it('returns detailed info with admin auth', async () => {
+      mockCheckDb.mockResolvedValue(true);
+      mockCheckRedis.mockResolvedValue(true);
+
+      const res = await request(app)
+        .get('/health')
+        .set('Authorization', 'Bearer test-admin-token');
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('ok');
       expect(res.body.database).toBe('connected');

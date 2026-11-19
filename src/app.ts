@@ -1,6 +1,8 @@
+import crypto from 'crypto';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import { env } from './config/env';
 import { errorHandler } from './middleware/error-handler';
 import { webhookRateLimiter, apiRateLimiter } from './middleware/rate-limiter';
 import { tenantRoutes } from './modules/tenant/tenant.routes';
@@ -14,33 +16,50 @@ import { checkRedisConnection } from './config/redis';
 const app = express();
 
 app.use(helmet());
+
+// CORS — read allowed origins from env variable
+const corsOrigins = env.CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean);
 app.use(cors({
-  origin: ['http://localhost:4200'],
+  origin: corsOrigins,
   credentials: true,
 }));
 
 // Raw body capture for Viber signature verification — must come before express.json()
 app.use('/api/viber', express.json({
+  limit: '100kb',
   verify: (req: express.Request, _res, buf) => {
     req.rawBody = buf;
   },
 }));
 
-app.use(express.json());
+// Explicit body size limit
+app.use(express.json({ limit: '100kb' }));
 
-// Health check
-app.get('/health', async (_req, res) => {
+// Health check — public endpoint returns only status; details require admin auth
+app.get('/health', async (req, res) => {
   const [db, redisOk] = await Promise.all([
     checkDatabaseConnection(),
     checkRedisConnection(),
   ]);
   const healthy = db && redisOk;
-  res.status(healthy ? 200 : 503).json({
-    status: healthy ? 'ok' : 'degraded',
-    database: db ? 'connected' : 'disconnected',
-    redis: redisOk ? 'connected' : 'disconnected',
-    timestamp: new Date().toISOString(),
-  });
+
+  // Check if admin token is provided for detailed response
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const isAdmin = token && token.length === env.ADMIN_API_TOKEN.length
+    && crypto.timingSafeEqual(Buffer.from(token, 'utf8'), Buffer.from(env.ADMIN_API_TOKEN, 'utf8'));
+
+  if (isAdmin) {
+    res.status(healthy ? 200 : 503).json({
+      status: healthy ? 'ok' : 'degraded',
+      database: db ? 'connected' : 'disconnected',
+      redis: redisOk ? 'connected' : 'disconnected',
+      timestamp: new Date().toISOString(),
+    });
+  } else {
+    res.status(healthy ? 200 : 503).json({
+      status: healthy ? 'ok' : 'degraded',
+    });
+  }
 });
 
 // Routes
@@ -48,8 +67,8 @@ app.use('/api/tenants', apiRateLimiter, tenantRoutes);
 app.use('/api/tenants/:id/connectors', apiRateLimiter, connectorRoutes);
 app.use('/api/viber/webhook', webhookRateLimiter);
 app.use('/api/viber', webhookRoutes);
-app.use('/api/telegram', telegramRoutes);
-app.use('/api/chatwoot', chatwootWebhookRoutes);
+app.use('/api/telegram', webhookRateLimiter, telegramRoutes);
+app.use('/api/chatwoot', webhookRateLimiter, chatwootWebhookRoutes);
 
 // Global error handler
 app.use(errorHandler);

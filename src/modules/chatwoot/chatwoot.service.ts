@@ -1,11 +1,12 @@
 import axios from 'axios';
 import { logger } from '../../config/logger';
+import { env } from '../../config/env';
 import {
   ChatwootSendMessageOptions,
   ChatwootCreateConversationOptions,
 } from './chatwoot.types';
 
-const CHATWOOT_BASE_URL = process.env.CHATWOOT_BASE_URL || 'http://localhost:3000';
+const CHATWOOT_BASE_URL = env.CHATWOOT_BASE_URL;
 
 export const chatwootService = {
   async findOrCreateConversation(options: ChatwootCreateConversationOptions): Promise<number | null> {

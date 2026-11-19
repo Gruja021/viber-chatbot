@@ -1,13 +1,44 @@
 import { pool } from '../../config/database';
 import { Tenant, CreateTenantInput, UpdateTenantInput, ChatwootSetupStatus } from './tenant.model';
-import { encrypt } from '../../utils/crypto';
+import { encrypt, decrypt } from '../../utils/crypto';
+import { logger } from '../../config/logger';
+
+/** Encrypt a token value (returns Buffer for DB storage), or null if empty. */
+function encryptToken(value: string | null | undefined): Buffer | null {
+  if (!value) return null;
+  return encrypt(value);
+}
+
+/** Decrypt a token from DB (Buffer) back to string, or null. */
+function decryptToken(value: Buffer | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    return decrypt(value);
+  } catch (err) {
+    logger.warn({ err }, 'Failed to decrypt token — may be plaintext legacy value');
+    // Fallback: if it's a string (legacy plaintext), return as-is
+    if (typeof value === 'string') return value;
+    return value.toString('utf8');
+  }
+}
+
+/** Decrypt sensitive token fields on a tenant row from DB. */
+function decryptTenantTokens(tenant: Tenant): Tenant {
+  return {
+    ...tenant,
+    viber_auth_token: decryptToken(tenant.viber_auth_token as any),
+    telegram_bot_token: decryptToken(tenant.telegram_bot_token as any),
+    openai_api_key: decryptToken(tenant.openai_api_key as any),
+    chatwoot_api_token: decryptToken(tenant.chatwoot_api_token as any),
+  };
+}
 
 export const tenantRepository = {
   async findAll(): Promise<Tenant[]> {
     const { rows } = await pool.query<Tenant>(
       'SELECT * FROM tenants ORDER BY created_at DESC'
     );
-    return rows;
+    return rows.map(decryptTenantTokens);
   },
 
   async findById(id: string): Promise<Tenant | null> {
@@ -15,7 +46,7 @@ export const tenantRepository = {
       'SELECT * FROM tenants WHERE id = $1',
       [id]
     );
-    return rows[0] || null;
+    return rows[0] ? decryptTenantTokens(rows[0]) : null;
   },
 
   async findBySlug(slug: string): Promise<Tenant | null> {
@@ -23,7 +54,7 @@ export const tenantRepository = {
       'SELECT * FROM tenants WHERE slug = $1 AND status = $2',
       [slug, 'active']
     );
-    return rows[0] || null;
+    return rows[0] ? decryptTenantTokens(rows[0]) : null;
   },
 
   async create(input: CreateTenantInput): Promise<Tenant> {
@@ -40,16 +71,16 @@ export const tenantRepository = {
       [
         input.slug,
         input.firm_name,
-        input.viber_auth_token || null,
-        input.telegram_bot_token || null,
+        encryptToken(input.viber_auth_token),
+        encryptToken(input.telegram_bot_token),
         input.database_type || null,
         encryptedCreds,
         input.system_prompt || 'You are a helpful customer support assistant.',
-        input.openai_api_key || null,
+        encryptToken(input.openai_api_key),
         input.openai_model || null,
         input.chatwoot_account_id || null,
         input.chatwoot_inbox_id || null,
-        input.chatwoot_api_token || null,
+        encryptToken(input.chatwoot_api_token),
         input.timezone || 'Europe/Belgrade',
         JSON.stringify(input.working_hours || {}),
         input.handover_keywords || ['zelim da pricam sa covekom', 'hocu operatera', 'agent', 'covek', 'operater'],
@@ -57,7 +88,7 @@ export const tenantRepository = {
         input.session_timeout_hours ?? 24,
       ]
     );
-    return rows[0];
+    return decryptTenantTokens(rows[0]);
   },
 
   async update(id: string, input: UpdateTenantInput): Promise<Tenant | null> {
@@ -75,11 +106,11 @@ export const tenantRepository = {
     }
     if (input.viber_auth_token !== undefined) {
       fields.push(`viber_auth_token = $${idx++}`);
-      values.push(input.viber_auth_token);
+      values.push(encryptToken(input.viber_auth_token));
     }
     if (input.telegram_bot_token !== undefined) {
       fields.push(`telegram_bot_token = $${idx++}`);
-      values.push(input.telegram_bot_token);
+      values.push(encryptToken(input.telegram_bot_token));
     }
     if (input.database_type !== undefined) {
       fields.push(`database_type = $${idx++}`);
@@ -95,7 +126,7 @@ export const tenantRepository = {
     }
     if (input.openai_api_key !== undefined) {
       fields.push(`openai_api_key = $${idx++}`);
-      values.push(input.openai_api_key);
+      values.push(encryptToken(input.openai_api_key));
     }
     if (input.openai_model !== undefined) {
       fields.push(`openai_model = $${idx++}`);
@@ -111,7 +142,7 @@ export const tenantRepository = {
     }
     if (input.chatwoot_api_token !== undefined) {
       fields.push(`chatwoot_api_token = $${idx++}`);
-      values.push(input.chatwoot_api_token);
+      values.push(encryptToken(input.chatwoot_api_token));
     }
     if (input.timezone !== undefined) {
       fields.push(`timezone = $${idx++}`);
@@ -147,7 +178,7 @@ export const tenantRepository = {
       `UPDATE tenants SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
       values
     );
-    return rows[0] || null;
+    return rows[0] ? decryptTenantTokens(rows[0]) : null;
   },
 
   async deactivate(id: string): Promise<Tenant | null> {

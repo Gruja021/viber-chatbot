@@ -45,8 +45,12 @@ export class SQLConnector implements IDataConnector {
     }
   }
 
-  private getSslConfig(): false | { rejectUnauthorized: boolean } {
-    return this.credentials.ssl === false ? false : { rejectUnauthorized: false };
+  private getSslConfig(): false | { rejectUnauthorized: boolean; ca?: string } {
+    if (this.credentials.ssl === false) return false;
+    return {
+      rejectUnauthorized: true,
+      ...(this.credentials.ca ? { ca: this.credentials.ca } : {}),
+    };
   }
 
   private async queryPostgres(searchTerm: string): Promise<ConnectorQueryResult> {

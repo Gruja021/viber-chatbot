@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { tenantResolver } from '../../middleware/tenant-resolver';
 import { viberSignature } from '../../middleware/viber-signature';
+import { adminAuth } from '../../middleware/admin-auth';
 import { handleWebhook } from './webhook.controller';
 import { viberService } from './viber.service';
 import { tenantService } from '../tenant/tenant.service';
@@ -17,14 +18,8 @@ router.post(
 );
 
 // Register webhook URL with Viber for a tenant (admin only)
-router.post('/register-webhook', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/register-webhook', adminAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token || token !== env.ADMIN_API_TOKEN) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
-
     const { tenant_id } = req.body;
     if (!tenant_id) {
       res.status(400).json({ error: 'tenant_id is required' });
@@ -52,14 +47,8 @@ router.post('/register-webhook', async (req: Request, res: Response, next: NextF
 });
 
 // Send test message to a Viber user (admin only)
-router.post('/test-message', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/test-message', adminAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token || token !== env.ADMIN_API_TOKEN) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
-
     const { tenant_id, viber_user_id } = req.body;
     if (!tenant_id || !viber_user_id) {
       res.status(400).json({ error: 'tenant_id and viber_user_id are required' });

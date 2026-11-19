@@ -30,14 +30,18 @@ describe('telegramService', () => {
   });
 
   describe('setWebhook', () => {
-    it('registers webhook URL', async () => {
+    it('registers webhook URL with secret token', async () => {
       mockAxios.post.mockResolvedValue({ data: { ok: true } });
 
       await telegramService.setWebhook('bot-token', 'https://example.com/webhook');
 
       expect(mockAxios.post).toHaveBeenCalledWith(
         'https://api.telegram.org/botbot-token/setWebhook',
-        { url: 'https://example.com/webhook', allowed_updates: ['message'] }
+        expect.objectContaining({
+          url: 'https://example.com/webhook',
+          allowed_updates: ['message'],
+          secret_token: expect.any(String),
+        })
       );
     });
 

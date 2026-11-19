@@ -2,19 +2,9 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { connectorService } from './connector.service';
 import { connectorRepository } from './connector.repository';
 import { tenantService } from '../tenant/tenant.service';
-import { env } from '../../config/env';
+import { adminAuth } from '../../middleware/admin-auth';
 
 const router = Router({ mergeParams: true });
-
-// Admin auth middleware
-function adminAuth(req: Request, res: Response, next: NextFunction) {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token || token !== env.ADMIN_API_TOKEN) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
-  }
-  next();
-}
 
 router.use(adminAuth);
 

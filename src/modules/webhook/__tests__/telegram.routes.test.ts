@@ -1,14 +1,26 @@
 import request from 'supertest';
 import { app } from '../../../app';
 import { tenantService } from '../../tenant/tenant.service';
-import { telegramService } from '../telegram.service';
+import { telegramService, generateTelegramSecretToken } from '../telegram.service';
 import * as messageHandler from '../message-handler';
 import { checkDatabaseConnection } from '../../../config/database';
 import { checkRedisConnection } from '../../../config/redis';
 
 jest.mock('../../tenant/tenant.service');
-jest.mock('../telegram.service');
+jest.mock('../telegram.service', () => {
+  const actual = jest.requireActual('../telegram.service');
+  return {
+    ...actual,
+    telegramService: {
+      sendTextMessage: jest.fn(),
+      setWebhook: jest.fn(),
+      getMe: jest.fn(),
+    },
+  };
+});
 jest.mock('../message-handler');
+
+const { generateTelegramSecretToken: realGenerateSecret } = jest.requireActual('../telegram.service');
 
 const mockTenantService = tenantService as jest.Mocked<typeof tenantService>;
 const mockTelegramService = telegramService as jest.Mocked<typeof telegramService>;
@@ -45,11 +57,14 @@ describe('telegram.routes integration', () => {
   });
 
   describe('POST /api/telegram/webhook/:tenantSlug', () => {
+    const secretToken = realGenerateSecret('tg-bot-token-123');
+
     it('returns 200 for valid Telegram update', async () => {
       mockTenantService.getBySlug.mockResolvedValue(mockTenant as any);
 
       const res = await request(app)
         .post('/api/telegram/webhook/test-tenant')
+        .set('x-telegram-bot-api-secret-token', secretToken)
         .send({
           update_id: 1,
           message: {
@@ -70,6 +85,7 @@ describe('telegram.routes integration', () => {
 
       await request(app)
         .post('/api/telegram/webhook/test-tenant')
+        .set('x-telegram-bot-api-secret-token', secretToken)
         .send({
           update_id: 2,
           message: {
@@ -99,6 +115,7 @@ describe('telegram.routes integration', () => {
 
       await request(app)
         .post('/api/telegram/webhook/test-tenant')
+        .set('x-telegram-bot-api-secret-token', secretToken)
         .send({
           update_id: 3,
           message: {
@@ -137,6 +154,7 @@ describe('telegram.routes integration', () => {
 
       const res = await request(app)
         .post('/api/telegram/webhook/test-tenant')
+        .set('x-telegram-bot-api-secret-token', secretToken)
         .send({
           update_id: 4,
           message: {

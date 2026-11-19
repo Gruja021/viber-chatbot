@@ -212,21 +212,44 @@ export const aiService = {
         for (const toolCall of toolCalls) {
           if (toolCall.type !== 'function') continue;
 
+          let args: Record<string, unknown>;
+          try {
+            args = JSON.parse(toolCall.function.arguments);
+          } catch (parseErr) {
+            logger.warn({ tenantId: tenant.id, functionName: toolCall.function.name, raw: toolCall.function.arguments }, 'Failed to parse tool call arguments');
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: JSON.stringify({ error: 'Invalid arguments format' }),
+            });
+            functionCallCount++;
+            continue;
+          }
+
           if (toolCall.function.name === 'escalate_to_human') {
-            const args = JSON.parse(toolCall.function.arguments);
             return {
               text: 'Za ovo pitanje bi bilo najbolje da proverim sa kolegama. Prosleđujem vaš zahtev našem timu.',
               shouldEscalate: true,
-              escalationReason: args.reason,
+              escalationReason: (args.reason as string) || 'unknown',
             };
           }
 
           if (toolCall.function.name === 'search_database' && hasConnector) {
-            const args = JSON.parse(toolCall.function.arguments);
-            logger.info({ searchTerm: args.search_term, source: args.source, tenantId: tenant.id }, 'AI calling search_database');
-            const results = await executeSearch(args.search_term, args.source, connectorMap);
+            const searchTerm = args.search_term as string;
+            if (!searchTerm || typeof searchTerm !== 'string') {
+              messages.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: JSON.stringify({ error: 'search_term is required and must be a string' }),
+              });
+              functionCallCount++;
+              continue;
+            }
+
+            logger.info({ searchTerm, source: args.source, tenantId: tenant.id }, 'AI calling search_database');
+            const results = await executeSearch(searchTerm, args.source as string | undefined, connectorMap);
             const totalResults = results.reduce((sum, r) => sum + r.total_results, 0);
-            logger.info({ searchTerm: args.search_term, totalResults, resultCount: results.length, tenantId: tenant.id }, 'search_database result');
+            logger.info({ searchTerm, totalResults, resultCount: results.length, tenantId: tenant.id }, 'search_database result');
 
             messages.push({
               role: 'tool',
