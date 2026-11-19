@@ -537,6 +537,69 @@ describe('TenantFormComponent', () => {
     });
   });
 
+  // ---- Security: write-only token fields ----
+  describe('Security — write-only token fields', () => {
+    it('should set token fields to empty string when loading tenant (write-only)', () => {
+      setup('tenant-1');
+      fixture.detectChanges();
+      // Even if API somehow returned token values, the component should clear them
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+      expect(component.form.get('viber_auth_token')?.value).toBe('');
+      expect(component.form.get('telegram_bot_token')?.value).toBe('');
+      expect(component.form.get('openai_api_key')?.value).toBe('');
+      expect(component.form.get('chatwoot_api_token')?.value).toBe('');
+    });
+
+    it('should not include empty token fields in update payload', () => {
+      setup('tenant-1');
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+      // Submit without changing token fields (they remain empty)
+      component.form.patchValue({ firm_name: 'Updated' });
+      component.onSubmit();
+
+      const req = httpTesting.expectOne('/api/tenants/tenant-1');
+      expect(req.request.body.viber_auth_token).toBeUndefined();
+      expect(req.request.body.telegram_bot_token).toBeUndefined();
+      expect(req.request.body.openai_api_key).toBeUndefined();
+      expect(req.request.body.chatwoot_api_token).toBeUndefined();
+      req.flush(makeTenant());
+    });
+
+    it('should include token in payload only when user enters a new value', () => {
+      setup('tenant-1');
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+      component.form.patchValue({ viber_auth_token: 'new-viber-token' });
+      component.onSubmit();
+
+      const req = httpTesting.expectOne('/api/tenants/tenant-1');
+      expect(req.request.body.viber_auth_token).toBe('new-viber-token');
+      req.flush(makeTenant());
+    });
+
+    it('should render token inputs as password type', () => {
+      setup(null);
+      // Disable auto-setup so chatwoot_api_token input is visible
+      component.autoSetupChatwoot.set(false);
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const viberInput = compiled.querySelector('input[formControlName="viber_auth_token"]');
+      const telegramInput = compiled.querySelector('input[formControlName="telegram_bot_token"]');
+      const openaiInput = compiled.querySelector('input[formControlName="openai_api_key"]');
+      const chatwootInput = compiled.querySelector('input[formControlName="chatwoot_api_token"]');
+
+      expect(viberInput?.getAttribute('type')).toBe('password');
+      expect(telegramInput?.getAttribute('type')).toBe('password');
+      expect(openaiInput?.getAttribute('type')).toBe('password');
+      expect(chatwootInput?.getAttribute('type')).toBe('password');
+    });
+  });
+
   // ---- Data Sources card ----
   describe('Data Sources card', () => {
     it('should show "added after creation" hint in create mode', () => {

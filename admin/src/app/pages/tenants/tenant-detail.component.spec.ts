@@ -652,6 +652,25 @@ describe('TenantDetailComponent', () => {
     );
   });
 
+  // Security: Tenant model should not expose secret fields
+  it('should not have raw secret tokens in tenant response model', () => {
+    setup();
+    fixture.detectChanges();
+    const tenant = makeTenant();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(tenant);
+
+    const t = component.tenant()!;
+    // Verify the Tenant model uses boolean flags instead of raw tokens
+    expect(t.has_viber_token).toBeDefined();
+    expect(t.has_telegram_token).toBeDefined();
+    expect(t.has_openai_api_key).toBeDefined();
+    // Verify raw token fields do NOT exist on the model
+    expect((t as any).viber_auth_token).toBeUndefined();
+    expect((t as any).telegram_bot_token).toBeUndefined();
+    expect((t as any).openai_api_key).toBeUndefined();
+    expect((t as any).chatwoot_api_token).toBeUndefined();
+  });
+
   it('should show Manage Connectors link in Data Sources section', () => {
     setup();
     fixture.detectChanges();

@@ -103,6 +103,30 @@ describe('LoginComponent', () => {
     expect(component.loading()).toBeFalse();
   });
 
+  it('should keep token in localStorage only after successful validation', () => {
+    component.token = 'test-token';
+    component.onLogin();
+
+    // Token is set immediately (optimistically)
+    expect(localStorage.getItem('admin_api_token')).toBe('test-token');
+
+    // Simulate success — token stays
+    httpTesting.expectOne('/api/tenants').flush([]);
+    expect(localStorage.getItem('admin_api_token')).toBe('test-token');
+  });
+
+  it('should remove token from localStorage on failed validation', () => {
+    component.token = 'bad-token';
+    component.onLogin();
+
+    // Token is set optimistically
+    expect(localStorage.getItem('admin_api_token')).toBe('bad-token');
+
+    // Simulate failure — token is removed via logout
+    httpTesting.expectOne('/api/tenants').flush('', { status: 401, statusText: 'Unauthorized' });
+    expect(localStorage.getItem('admin_api_token')).toBeNull();
+  });
+
   it('should clear error when retrying login', () => {
     component.token = 'bad';
     component.onLogin();
