@@ -64,10 +64,7 @@ import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
                 <mat-list-item>
                   <span matListItemTitle>Status</span>
                   <span matListItemLine>
-                    <mat-chip-set>
-                      <mat-chip [style.background-color]="tenant()!.status === 'active' ? '#4caf50' : '#9e9e9e'"
-                                style="color: white">{{ tenant()!.status }}</mat-chip>
-                    </mat-chip-set>
+                    <span class="status-badge" [class.active]="tenant()!.status === 'active'">{{ tenant()!.status }}</span>
                   </span>
                 </mat-list-item>
                 <mat-list-item>
@@ -313,6 +310,17 @@ import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
       border-radius: 4px;
       font-size: 13px;
     }
+    .status-badge {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 6px 16px;
+      border-radius: 16px;
+      font-size: 14px;
+      font-weight: 500;
+      color: white;
+      background-color: #9e9e9e;
+    }
+    .status-badge.active { background-color: #4caf50; }
     mat-card { margin-bottom: 16px; }
     .platform-heading { margin: 16px 0 8px; }
     .platform-heading:first-child { margin-top: 0; }

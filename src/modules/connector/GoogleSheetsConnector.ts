@@ -2,6 +2,19 @@ import { google } from 'googleapis';
 import { logger } from '../../config/logger';
 import { IDataConnector, ConnectorQueryResult, GoogleSheetsCredentials } from './connector.types';
 
+const DIACRITICS_MAP: Record<string, string> = {
+  'č': 'c', 'ć': 'c', 'š': 's', 'ž': 'z', 'đ': 'd',
+  'ä': 'a', 'ö': 'o', 'ü': 'u', 'ë': 'e', 'ï': 'i',
+};
+
+function removeDiacritics(str: string): string {
+  return str.replace(/[^\u0000-\u007F]/g, (ch) => DIACRITICS_MAP[ch] || ch);
+}
+
+function normalizeText(str: string): string {
+  return removeDiacritics(str.toLowerCase());
+}
+
 export class GoogleSheetsConnector implements IDataConnector {
   private credentials: GoogleSheetsCredentials;
 
@@ -41,13 +54,20 @@ export class GoogleSheetsConnector implements IDataConnector {
       const headers = rows[0].map((h: string) => String(h).toLowerCase().trim());
       const dataRows = rows.slice(1);
 
-      const term = searchTerm.toLowerCase();
+      const searchWords = normalizeText(searchTerm)
+        .split(/\s+/)
+        .filter((w) => w.length > 1);
+
       const matched = dataRows
-        .filter((row) =>
-          row.some((cell: unknown) => String(cell).toLowerCase().includes(term))
-        )
-        .slice(0, 10)
         .map((row) => {
+          const rowText = row.map((cell: unknown) => normalizeText(String(cell))).join(' ');
+          const matchCount = searchWords.filter((word) => rowText.includes(word)).length;
+          return { row, matchCount };
+        })
+        .filter(({ matchCount }) => matchCount > 0)
+        .sort((a, b) => b.matchCount - a.matchCount)
+        .slice(0, 10)
+        .map(({ row }) => {
           const obj: Record<string, unknown> = {};
           headers.forEach((header: string, i: number) => {
             obj[header] = row[i] ?? null;
