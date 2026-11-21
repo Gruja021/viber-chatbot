@@ -27,13 +27,17 @@ export async function handleTelegramWebhook(req: Request, res: Response) {
 
   try {
     if (!isTelegramTextMessage(update)) {
-      logger.debug({ tenantSlug: tenant.slug }, 'Non-text Telegram message, ignoring');
+      logger.info({ tenantSlug: tenant.slug, update }, 'Non-text Telegram message, ignoring');
       return;
     }
 
     const message = update.message!;
     const text = getTelegramTextContent(update);
-    if (!text) return;
+    if (!text) {
+      logger.info({ tenantSlug: tenant.slug }, 'Empty text content, ignoring');
+      return;
+    }
+    logger.info({ tenantSlug: tenant.slug, text, chatId: message.chat.id }, 'Processing Telegram text message');
 
     const sender: PlatformSender = {
       platform: 'telegram',

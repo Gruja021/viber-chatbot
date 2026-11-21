@@ -5,6 +5,7 @@ import { agentTimeoutService } from '../agent-timeout/agent-timeout.service';
 import { viberService } from '../webhook/viber.service';
 import { telegramService } from '../webhook/telegram.service';
 import { tenantService } from '../tenant/tenant.service';
+import { chatwootService } from './chatwoot.service';
 
 /**
  * Handle incoming Chatwoot webhooks.
@@ -29,6 +30,9 @@ export async function handleChatwootWebhook(req: Request, res: Response) {
 
     // Only handle outgoing messages (agent responses)
     if (payload.message_type !== 'outgoing') return;
+
+    // Ignore private/internal notes — these are for agents only, not for the customer
+    if (payload.private === true) return;
 
     // Ignore bot messages (our own AI responses forwarded to Chatwoot)
     if (payload.sender?.type === 'agent_bot') return;
@@ -106,6 +110,46 @@ async function handleConversationResolved(payload: any): Promise<void> {
   if (!conversation) {
     logger.warn({ chatwootConversationId }, 'No conversation found for resolved Chatwoot ID');
     return;
+  }
+
+  // If conversation is waiting for a human agent (human_active or pending_human),
+  // do NOT close it — reopen in Chatwoot so the agent can still respond.
+  // This prevents auto-resolve from closing conversations over weekends/holidays.
+  // Limit: only reopen once to avoid infinite reopen loops.
+  if (conversation.conversation_status === 'human_active' || conversation.conversation_status === 'pending_human') {
+    if ((conversation.reopen_count || 0) >= 1) {
+      logger.info(
+        { conversationId: conversation.id, chatwootConversationId, reopenCount: conversation.reopen_count },
+        'Reopen limit reached — closing conversation'
+      );
+      // Fall through to close below
+    } else {
+      logger.info(
+        { conversationId: conversation.id, chatwootConversationId, status: conversation.conversation_status },
+        'Conversation awaiting agent — reopening instead of closing'
+      );
+
+      const tenant = await tenantService.getById(conversation.tenant_id);
+      if (tenant?.chatwoot_api_token && tenant.chatwoot_account_id) {
+        const reopened = await chatwootService.reopenConversation({
+          chatwootApiToken: tenant.chatwoot_api_token,
+          chatwootAccountId: tenant.chatwoot_account_id,
+          conversationId: chatwootConversationId,
+        });
+
+        if (reopened) {
+          await conversationService.incrementReopenCount(conversation.id);
+          await chatwootService.addInternalNote({
+            chatwootApiToken: tenant.chatwoot_api_token,
+            chatwootAccountId: tenant.chatwoot_account_id,
+            conversationId: chatwootConversationId,
+            content: '[System] Konverzacija je automatski ponovo otvorena jer korisnik čeka odgovor radnika.',
+          });
+        }
+      }
+
+      return;
+    }
   }
 
   await conversationService.setStatus(conversation.id, 'closed');

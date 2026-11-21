@@ -131,6 +131,10 @@ export const conversationService = {
     await conversationRepository.clearPendingAgent(conversationId);
   },
 
+  async incrementReopenCount(conversationId: string): Promise<void> {
+    await conversationRepository.incrementReopenCount(conversationId);
+  },
+
   async findByChatwootConversationId(chatwootConversationId: number): Promise<Conversation | null> {
     return conversationRepository.findByChatwootConversationId(chatwootConversationId);
   },

@@ -4,18 +4,21 @@ import { agentTimeoutService } from '../../agent-timeout/agent-timeout.service';
 import { viberService } from '../../webhook/viber.service';
 import { telegramService } from '../../webhook/telegram.service';
 import { tenantService } from '../../tenant/tenant.service';
+import { chatwootService } from '../chatwoot.service';
 
 jest.mock('../../conversation/conversation.service');
 jest.mock('../../agent-timeout/agent-timeout.service');
 jest.mock('../../webhook/viber.service');
 jest.mock('../../webhook/telegram.service');
 jest.mock('../../tenant/tenant.service');
+jest.mock('../chatwoot.service');
 
 const mockConversationService = conversationService as jest.Mocked<typeof conversationService>;
 const mockAgentTimeoutService = agentTimeoutService as jest.Mocked<typeof agentTimeoutService>;
 const mockViberService = viberService as jest.Mocked<typeof viberService>;
 const mockTelegramService = telegramService as jest.Mocked<typeof telegramService>;
 const mockTenantService = tenantService as jest.Mocked<typeof tenantService>;
+const mockChatwootService = chatwootService as jest.Mocked<typeof chatwootService>;
 
 const makeRes = () => {
   const res: any = {};
@@ -279,14 +282,31 @@ describe('chatwoot.webhook.controller', () => {
     expect(mockTelegramService.sendTextMessage).not.toHaveBeenCalled();
   });
 
+  it('catches and logs errors without crashing', async () => {
+    mockConversationService.findByChatwootConversationId.mockRejectedValue(new Error('DB error'));
+
+    const res = makeRes();
+    await handleChatwootWebhook(makeReq({
+      event: 'message_created',
+      message_type: 'outgoing',
+      sender: { type: 'user' },
+      conversation: { id: 42 },
+      content: 'Agent reply',
+    }), res);
+
+    // Should not throw, just log the error
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
   describe('conversation_resolved', () => {
-    it('sets status to closed on conversation_status_changed resolved', async () => {
+    it('sets status to closed on conversation_status_changed resolved (ai_active)', async () => {
       const conversation = {
         id: 'conv-1',
         tenant_id: 't-1',
         platform: 'viber' as const,
         platform_user_id: 'user-1',
         chatwoot_conversation_id: 42,
+        conversation_status: 'ai_active',
       };
 
       mockConversationService.findByChatwootConversationId.mockResolvedValue(conversation as any);
@@ -362,6 +382,221 @@ describe('chatwoot.webhook.controller', () => {
       }), res);
 
       expect(mockConversationService.findByChatwootConversationId).not.toHaveBeenCalled();
+    });
+
+    it('reopens conversation instead of closing when status is human_active (first time)', async () => {
+      const conversation = {
+        id: 'conv-1',
+        tenant_id: 't-1',
+        platform: 'telegram' as const,
+        platform_user_id: 'user-1',
+        chatwoot_conversation_id: 42,
+        conversation_status: 'human_active',
+        reopen_count: 0,
+      };
+      const tenant = {
+        id: 't-1',
+        chatwoot_api_token: 'token-123',
+        chatwoot_account_id: 1,
+      };
+
+      mockConversationService.findByChatwootConversationId.mockResolvedValue(conversation as any);
+      mockTenantService.getById.mockResolvedValue(tenant as any);
+      mockChatwootService.reopenConversation.mockResolvedValue(true);
+      mockChatwootService.addInternalNote.mockResolvedValue(undefined);
+
+      const res = makeRes();
+      await handleChatwootWebhook(makeReq({
+        event: 'conversation_status_changed',
+        status: 'resolved',
+        id: 42,
+      }), res);
+
+      expect(mockConversationService.setStatus).not.toHaveBeenCalled();
+      expect(mockChatwootService.reopenConversation).toHaveBeenCalledWith({
+        chatwootApiToken: 'token-123',
+        chatwootAccountId: 1,
+        conversationId: 42,
+      });
+      expect(mockConversationService.incrementReopenCount).toHaveBeenCalledWith('conv-1');
+      expect(mockChatwootService.addInternalNote).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: expect.stringContaining('ponovo otvorena'),
+        })
+      );
+    });
+
+    it('reopens conversation instead of closing when status is pending_human (first time)', async () => {
+      const conversation = {
+        id: 'conv-1',
+        tenant_id: 't-1',
+        platform: 'viber' as const,
+        platform_user_id: 'user-1',
+        chatwoot_conversation_id: 42,
+        conversation_status: 'pending_human',
+        reopen_count: 0,
+      };
+      const tenant = {
+        id: 't-1',
+        chatwoot_api_token: 'token-123',
+        chatwoot_account_id: 1,
+      };
+
+      mockConversationService.findByChatwootConversationId.mockResolvedValue(conversation as any);
+      mockTenantService.getById.mockResolvedValue(tenant as any);
+      mockChatwootService.reopenConversation.mockResolvedValue(true);
+      mockChatwootService.addInternalNote.mockResolvedValue(undefined);
+
+      const res = makeRes();
+      await handleChatwootWebhook(makeReq({
+        event: 'conversation_status_changed',
+        status: 'resolved',
+        id: 42,
+      }), res);
+
+      expect(mockConversationService.setStatus).not.toHaveBeenCalled();
+      expect(mockChatwootService.reopenConversation).toHaveBeenCalled();
+    });
+
+    it('closes conversation when reopen limit reached (human_active, reopen_count=1)', async () => {
+      const conversation = {
+        id: 'conv-1',
+        tenant_id: 't-1',
+        platform: 'viber' as const,
+        platform_user_id: 'user-1',
+        chatwoot_conversation_id: 42,
+        conversation_status: 'human_active',
+        reopen_count: 1,
+      };
+
+      mockConversationService.findByChatwootConversationId.mockResolvedValue(conversation as any);
+      mockConversationService.setStatus.mockResolvedValue(undefined);
+      mockConversationService.invalidateCache.mockResolvedValue(undefined);
+
+      const res = makeRes();
+      await handleChatwootWebhook(makeReq({
+        event: 'conversation_status_changed',
+        status: 'resolved',
+        id: 42,
+      }), res);
+
+      expect(mockChatwootService.reopenConversation).not.toHaveBeenCalled();
+      expect(mockConversationService.setStatus).toHaveBeenCalledWith('conv-1', 'closed');
+      expect(mockConversationService.invalidateCache).toHaveBeenCalledWith('t-1', 'viber', 'user-1');
+    });
+
+    it('closes conversation when reopen limit reached (pending_human, reopen_count=1)', async () => {
+      const conversation = {
+        id: 'conv-1',
+        tenant_id: 't-1',
+        platform: 'telegram' as const,
+        platform_user_id: 'user-1',
+        chatwoot_conversation_id: 42,
+        conversation_status: 'pending_human',
+        reopen_count: 1,
+      };
+
+      mockConversationService.findByChatwootConversationId.mockResolvedValue(conversation as any);
+      mockConversationService.setStatus.mockResolvedValue(undefined);
+      mockConversationService.invalidateCache.mockResolvedValue(undefined);
+
+      const res = makeRes();
+      await handleChatwootWebhook(makeReq({
+        event: 'conversation_status_changed',
+        status: 'resolved',
+        id: 42,
+      }), res);
+
+      expect(mockChatwootService.reopenConversation).not.toHaveBeenCalled();
+      expect(mockConversationService.setStatus).toHaveBeenCalledWith('conv-1', 'closed');
+    });
+
+    it('skips reopen when tenant has no chatwoot_api_token', async () => {
+      const conversation = {
+        id: 'conv-1',
+        tenant_id: 't-1',
+        platform: 'viber' as const,
+        platform_user_id: 'user-1',
+        chatwoot_conversation_id: 42,
+        conversation_status: 'pending_human',
+        reopen_count: 0,
+      };
+      const tenant = {
+        id: 't-1',
+        chatwoot_api_token: null,
+        chatwoot_account_id: null,
+      };
+
+      mockConversationService.findByChatwootConversationId.mockResolvedValue(conversation as any);
+      mockTenantService.getById.mockResolvedValue(tenant as any);
+
+      const res = makeRes();
+      await handleChatwootWebhook(makeReq({
+        event: 'conversation_status_changed',
+        status: 'resolved',
+        id: 42,
+      }), res);
+
+      expect(mockChatwootService.reopenConversation).not.toHaveBeenCalled();
+      expect(mockConversationService.setStatus).not.toHaveBeenCalled();
+    });
+
+    it('does not add internal note when reopenConversation fails', async () => {
+      const conversation = {
+        id: 'conv-1',
+        tenant_id: 't-1',
+        platform: 'viber' as const,
+        platform_user_id: 'user-1',
+        chatwoot_conversation_id: 42,
+        conversation_status: 'human_active',
+        reopen_count: 0,
+      };
+      const tenant = {
+        id: 't-1',
+        chatwoot_api_token: 'token-123',
+        chatwoot_account_id: 1,
+      };
+
+      mockConversationService.findByChatwootConversationId.mockResolvedValue(conversation as any);
+      mockTenantService.getById.mockResolvedValue(tenant as any);
+      mockChatwootService.reopenConversation.mockResolvedValue(false);
+
+      const res = makeRes();
+      await handleChatwootWebhook(makeReq({
+        event: 'conversation_status_changed',
+        status: 'resolved',
+        id: 42,
+      }), res);
+
+      expect(mockChatwootService.reopenConversation).toHaveBeenCalled();
+      expect(mockConversationService.incrementReopenCount).not.toHaveBeenCalled();
+      expect(mockChatwootService.addInternalNote).not.toHaveBeenCalled();
+      expect(mockConversationService.setStatus).not.toHaveBeenCalled();
+    });
+
+    it('closes conversation normally when status is closed', async () => {
+      const conversation = {
+        id: 'conv-1',
+        tenant_id: 't-1',
+        platform: 'viber' as const,
+        platform_user_id: 'user-1',
+        chatwoot_conversation_id: 42,
+        conversation_status: 'closed',
+      };
+
+      mockConversationService.findByChatwootConversationId.mockResolvedValue(conversation as any);
+      mockConversationService.setStatus.mockResolvedValue(undefined);
+      mockConversationService.invalidateCache.mockResolvedValue(undefined);
+
+      const res = makeRes();
+      await handleChatwootWebhook(makeReq({
+        event: 'conversation_status_changed',
+        status: 'resolved',
+        id: 42,
+      }), res);
+
+      expect(mockConversationService.setStatus).toHaveBeenCalledWith('conv-1', 'closed');
+      expect(mockChatwootService.reopenConversation).not.toHaveBeenCalled();
     });
   });
 });

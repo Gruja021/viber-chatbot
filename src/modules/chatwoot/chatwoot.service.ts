@@ -98,6 +98,29 @@ export const chatwootService = {
     }
   },
 
+  async reopenConversation(options: {
+    chatwootApiToken: string;
+    chatwootAccountId: number;
+    conversationId: number;
+  }): Promise<boolean> {
+    try {
+      await axios.post(
+        `${CHATWOOT_BASE_URL}/api/v1/accounts/${options.chatwootAccountId}/conversations/${options.conversationId}/toggle_status`,
+        { status: 'open' },
+        {
+          headers: {
+            'api_access_token': options.chatwootApiToken,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      return true;
+    } catch (err) {
+      logger.error({ err, conversationId: options.conversationId }, 'Failed to reopen Chatwoot conversation');
+      return false;
+    }
+  },
+
   async assignConversation(options: {
     chatwootApiToken: string;
     chatwootAccountId: number;
