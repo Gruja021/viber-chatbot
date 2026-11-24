@@ -78,16 +78,18 @@ services:
       RAILS_ENV: production
       SECRET_KEY_BASE: ${CHATWOOT_SECRET_KEY_BASE}
       FRONTEND_URL: ${CHATWOOT_FRONTEND_URL}
+      ACTION_CABLE_URL: ${ACTION_CABLE_URL:-}
+      FORCE_SSL: "false"
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/chatwoot
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       RAILS_LOG_TO_STDOUT: "true"
     entrypoint: /bin/sh
     command: >
       -c "rm -f /app/tmp/pids/server.pid && bundle exec rails db:chatwoot_prepare && bundle exec rails s -b 0.0.0.0 -p 3000"
+    ports:
+      - "3001:3000"
     networks:
       - internal
-    expose:
-      - "3000"
 
   chatwoot-sidekiq:
     image: chatwoot/chatwoot:v4.0.2
@@ -98,6 +100,8 @@ services:
       RAILS_ENV: production
       SECRET_KEY_BASE: ${CHATWOOT_SECRET_KEY_BASE}
       FRONTEND_URL: ${CHATWOOT_FRONTEND_URL}
+      ACTION_CABLE_URL: ${ACTION_CABLE_URL:-}
+      FORCE_SSL: "false"
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/chatwoot
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     command: bundle exec sidekiq -C config/sidekiq.yml
@@ -116,7 +120,6 @@ services:
       - ./admin/dist/admin/browser:/usr/share/nginx/html:ro
     depends_on:
       - app
-      - chatwoot-rails
     networks:
       - internal
 
