@@ -30,6 +30,7 @@ REQUIRED_VARS=(
   POSTGRES_PASSWORD
   REDIS_PASSWORD
   CHATWOOT_SECRET_KEY_BASE
+  CHATWOOT_FRONTEND_URL
   CORS_ORIGIN
 )
 
@@ -41,8 +42,19 @@ for var in "${REQUIRED_VARS[@]}"; do
 done
 
 # Warn about default values
-if [ "$ADMIN_API_TOKEN" = "change-me-in-production" ]; then
+if [ "$ADMIN_API_TOKEN" = "change-me-in-production" ] || [ "$ADMIN_API_TOKEN" = "your-secret-admin-token-here" ]; then
   echo "ERROR: ADMIN_API_TOKEN is still set to default value. Change it!"
+  exit 1
+fi
+
+if [ "$ENCRYPTION_KEY" = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" ]; then
+  echo "ERROR: ENCRYPTION_KEY is still set to default value."
+  echo "  Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+  exit 1
+fi
+
+if ! echo "$ENCRYPTION_KEY" | grep -qE '^[0-9a-fA-F]{64}$'; then
+  echo "ERROR: ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)."
   exit 1
 fi
 
@@ -88,9 +100,25 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
+# Wait for Chatwoot to be ready
+echo "--- Waiting for Chatwoot to be ready ---"
+for i in $(seq 1 30); do
+  if curl -sf http://localhost:3001/auth/sign_in > /dev/null 2>&1; then
+    echo "Chatwoot is ready!"
+    break
+  fi
+  if [ "$i" -eq 30 ]; then
+    echo "WARNING: Chatwoot did not become ready after 30 attempts."
+    echo "  Check logs: docker compose -f docker-compose.prod.yml logs chatwoot-rails --tail=50"
+  fi
+  echo "  Waiting... ($i/30)"
+  sleep 3
+done
+
 echo ""
 echo "=== Deploy complete ==="
 echo "App:      ${WEBHOOK_BASE_URL}/health"
 echo "Admin:    ${CORS_ORIGIN}"
+echo "Chatwoot: ${CHATWOOT_FRONTEND_URL}"
 echo ""
 docker compose -f docker-compose.prod.yml ps
