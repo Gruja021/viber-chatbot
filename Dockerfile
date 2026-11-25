@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN NODE_OPTIONS="--max-old-space-size=2048" npm run build
+RUN npx tsup --no-dts
 
 # Stage 2 — production
 FROM node:20-alpine
