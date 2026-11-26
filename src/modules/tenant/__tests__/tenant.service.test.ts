@@ -32,6 +32,13 @@ const makeTenant = (overrides: Partial<Tenant> = {}): Tenant => ({
   session_timeout_hours: 24,
   chatwoot_setup_status: 'none',
   chatwoot_setup_error: null,
+  monthly_credit_limit: null,
+  credits_used: 0,
+  bonus_credits: 0,
+  credits_reset_at: null,
+  per_conversation_message_limit: null,
+  credit_limit_message: null,
+  auto_escalate_media: true,
   status: 'active',
   created_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
   updated_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
@@ -69,6 +76,26 @@ describe('tenantService', () => {
       expect(cached).not.toHaveProperty('viber_auth_token');
       expect(cached).not.toHaveProperty('chatwoot_api_token');
       expect(cached).not.toHaveProperty('openai_api_key');
+    });
+
+    it('includes credit fields in cache entry', async () => {
+      const tenant = makeTenant({
+        monthly_credit_limit: 200,
+        credits_used: 75,
+        bonus_credits: 10,
+        per_conversation_message_limit: 5,
+        auto_escalate_media: false,
+      });
+      mockRepo.findBySlug.mockResolvedValue(tenant);
+
+      await tenantService.getBySlug('test-tenant');
+      const cachedJson = (mockRedis.setex as jest.Mock).mock.calls[0][2];
+      const cached = JSON.parse(cachedJson);
+      expect(cached).toHaveProperty('monthly_credit_limit', 200);
+      expect(cached).toHaveProperty('credits_used', 75);
+      expect(cached).toHaveProperty('bonus_credits', 10);
+      expect(cached).toHaveProperty('per_conversation_message_limit', 5);
+      expect(cached).toHaveProperty('auto_escalate_media', false);
     });
 
     it('returns null when tenant not in DB', async () => {
@@ -235,6 +262,41 @@ describe('tenantService', () => {
 
       const result = await tenantService.create({ slug: 'x', firm_name: 'X' });
       expect(result).toHaveProperty('has_openai_api_key', false);
+    });
+
+    it('includes credit fields in public tenant', async () => {
+      const tenant = makeTenant({
+        monthly_credit_limit: 500,
+        credits_used: 100,
+        bonus_credits: 25,
+        credits_reset_at: new Date('2026-12-01'),
+        per_conversation_message_limit: 10,
+        credit_limit_message: 'Custom limit msg',
+        auto_escalate_media: false,
+      });
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X', auto_setup_chatwoot: false });
+      expect(result).toHaveProperty('monthly_credit_limit', 500);
+      expect(result).toHaveProperty('credits_used', 100);
+      expect(result).toHaveProperty('bonus_credits', 25);
+      expect(result).toHaveProperty('credits_reset_at');
+      expect(result).toHaveProperty('per_conversation_message_limit', 10);
+      expect(result).toHaveProperty('credit_limit_message', 'Custom limit msg');
+      expect(result).toHaveProperty('auto_escalate_media', false);
+    });
+
+    it('includes null credit fields in public tenant when unset', async () => {
+      const tenant = makeTenant();
+      mockRepo.create.mockResolvedValue(tenant);
+
+      const result = await tenantService.create({ slug: 'x', firm_name: 'X', auto_setup_chatwoot: false });
+      expect(result).toHaveProperty('monthly_credit_limit', null);
+      expect(result).toHaveProperty('credits_used', 0);
+      expect(result).toHaveProperty('bonus_credits', 0);
+      expect(result).toHaveProperty('per_conversation_message_limit', null);
+      expect(result).toHaveProperty('credit_limit_message', null);
+      expect(result).toHaveProperty('auto_escalate_media', true);
     });
   });
 

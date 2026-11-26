@@ -4,6 +4,9 @@ import { chatwootService } from '../chatwoot/chatwoot.service';
 import { aiService } from '../ai/ai.service';
 import { isWithinWorkingHours, matchesHandoverKeyword } from '../business-hours/business-hours.service';
 import { agentTimeoutService } from '../agent-timeout/agent-timeout.service';
+import { aiCreditsService } from '../ai-credits/ai-credits.service';
+import { CreditType } from '../ai-credits/ai-credits.types';
+import { AIResponse } from '../ai/ai.types';
 import { PlatformSender, PlatformMessenger } from '../../types/platform';
 
 /**
@@ -153,8 +156,8 @@ async function handleOffHours(
     });
   }
 
-  const recentMessages = await conversationService.getRecentMessages(conversation.id, 20);
-  const aiResponse = await aiService.generateResponse(tenant, recentMessages, text);
+  const aiResponse = await callAIWithCreditCheck(tenant, conversation, sender, text, messenger);
+  if (!aiResponse) return; // Credit limit reached, fallback already sent
 
   if (aiResponse.shouldEscalate) {
     // AI can't handle → forward to Chatwoot for agent to see when they arrive
@@ -224,8 +227,8 @@ async function handleAIFirstMode(
     });
   }
 
-  const recentMessages = await conversationService.getRecentMessages(conversation.id, 20);
-  const aiResponse = await aiService.generateResponse(tenant, recentMessages, text);
+  const aiResponse = await callAIWithCreditCheck(tenant, conversation, sender, text, messenger);
+  if (!aiResponse) return; // Credit limit reached, fallback already sent
 
   if (aiResponse.shouldEscalate) {
     // Escalate to human
@@ -311,6 +314,64 @@ async function handleHumanFirstMode(
 
   // No Chatwoot conversation possible, fallback to AI
   await handleAIFirstMode(tenant, conversation, sender, text, messenger);
+}
+
+/**
+ * Call AI with credit check. Returns null if credits are exhausted (fallback already sent).
+ */
+async function callAIWithCreditCheck(
+  tenant: any,
+  conversation: any,
+  sender: PlatformSender,
+  text: string,
+  messenger: PlatformMessenger
+): Promise<AIResponse | null> {
+  // Pre-check: monthly limit and per-conversation limit
+  const creditCheck = await aiCreditsService.checkCredits(
+    tenant.id,
+    conversation.id,
+    'text_response'
+  );
+
+  if (!creditCheck.allowed) {
+    logger.info({ tenantId: tenant.id, conversationId: conversation.id, reason: creditCheck.reason }, 'AI credit limit reached');
+
+    const fallbackMsg = creditCheck.reason || 'Trenutno nismo u mogućnosti da odgovorimo automatski. Vaša poruka je prosleđena našem timu.';
+    await messenger.sendTextMessage(tenant, sender.userId, fallbackMsg);
+    await conversationService.addMessage(conversation.id, 'assistant', fallbackMsg);
+
+    // Escalate to Chatwoot if available
+    const chatwootConvId = await ensureChatwootConversation(tenant, conversation, sender);
+    if (tenant.chatwoot_api_token && chatwootConvId) {
+      await chatwootService.addInternalNote({
+        chatwootApiToken: tenant.chatwoot_api_token,
+        chatwootAccountId: tenant.chatwoot_account_id!,
+        conversationId: chatwootConvId,
+        content: `[AI Credit Limit] Mesečni AI kredit limit dostignut. Poruka korisnika: "${text}"`,
+      });
+      await conversationService.setStatus(conversation.id, 'human_active');
+      await conversationService.setHandover(conversation.id, 24 * 60);
+    }
+
+    return null;
+  }
+
+  // Call AI
+  const recentMessages = await conversationService.getRecentMessages(conversation.id, 20);
+  const aiResponse = await aiService.generateResponse(tenant, recentMessages, text);
+
+  // Determine credit type and deduct
+  const creditType: CreditType = aiResponse.usedDatabaseSearch ? 'database_search' : 'text_response';
+  const model = tenant.openai_model || 'gpt-4o-mini';
+  await aiCreditsService.deductCredits(
+    tenant.id,
+    conversation.id,
+    creditType,
+    aiResponse.tokenUsage,
+    model
+  );
+
+  return aiResponse;
 }
 
 async function ensureChatwootConversation(

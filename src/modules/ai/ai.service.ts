@@ -189,6 +189,10 @@ export const aiService = {
 
       const model = tenant.openai_model || MODEL;
 
+      let totalPromptTokens = 0;
+      let totalCompletionTokens = 0;
+      let usedDatabaseSearch = false;
+
       let response = await client.chat.completions.create({
         model,
         temperature: 0.3,
@@ -196,6 +200,9 @@ export const aiService = {
         messages,
         tools,
       });
+
+      totalPromptTokens += response.usage?.prompt_tokens ?? 0;
+      totalCompletionTokens += response.usage?.completion_tokens ?? 0;
 
       logger.info({ tenantId: tenant.id, finishReason: response.choices[0]?.finish_reason, hasToolCalls: !!response.choices[0]?.message?.tool_calls, content: response.choices[0]?.message?.content?.substring(0, 100) }, 'AI initial response');
 
@@ -231,10 +238,17 @@ export const aiService = {
               text: 'Za ovo pitanje bi bilo najbolje da proverim sa kolegama. Prosleđujem vaš zahtev našem timu.',
               shouldEscalate: true,
               escalationReason: (args.reason as string) || 'unknown',
+              usedDatabaseSearch,
+              tokenUsage: {
+                promptTokens: totalPromptTokens,
+                completionTokens: totalCompletionTokens,
+                totalTokens: totalPromptTokens + totalCompletionTokens,
+              },
             };
           }
 
           if (toolCall.function.name === 'search_database' && hasConnector) {
+            usedDatabaseSearch = true;
             const searchTerm = args.search_term as string;
             if (!searchTerm || typeof searchTerm !== 'string') {
               messages.push({
@@ -268,7 +282,16 @@ export const aiService = {
           messages,
           tools,
         });
+
+        totalPromptTokens += response.usage?.prompt_tokens ?? 0;
+        totalCompletionTokens += response.usage?.completion_tokens ?? 0;
       }
+
+      const tokenUsage = {
+        promptTokens: totalPromptTokens,
+        completionTokens: totalCompletionTokens,
+        totalTokens: totalPromptTokens + totalCompletionTokens,
+      };
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
@@ -276,23 +299,31 @@ export const aiService = {
         return {
           text: 'Извините, nisam uspeo da generišem odgovor. Pokušajte ponovo.',
           shouldEscalate: false,
+          usedDatabaseSearch,
+          tokenUsage,
         };
       }
 
-      return { text: content, shouldEscalate: false };
+      return { text: content, shouldEscalate: false, usedDatabaseSearch, tokenUsage };
     } catch (err: any) {
       logger.error({ err, tenantId: tenant.id }, 'AI response generation failed');
+
+      const emptyTokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
       if (err?.status === 429) {
         return {
           text: 'Trenutno imam povećan broj zahteva. Molim vas pokušajte ponovo za koji minut.',
           shouldEscalate: false,
+          usedDatabaseSearch: false,
+          tokenUsage: emptyTokenUsage,
         };
       }
 
       return {
         text: 'Došlo je do greške prilikom obrade vaše poruke. Pokušajte ponovo kasnije.',
         shouldEscalate: false,
+        usedDatabaseSearch: false,
+        tokenUsage: emptyTokenUsage,
       };
     }
   },

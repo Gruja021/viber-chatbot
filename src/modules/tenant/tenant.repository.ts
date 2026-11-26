@@ -65,8 +65,10 @@ export const tenantRepository = {
     const { rows } = await pool.query<Tenant>(
       `INSERT INTO tenants (slug, firm_name, viber_auth_token, telegram_bot_token, database_type,
         database_credentials, system_prompt, openai_api_key, openai_model, chatwoot_account_id,
-        chatwoot_inbox_id, chatwoot_api_token, timezone, working_hours, handover_keywords, agent_timeout_seconds, session_timeout_hours)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        chatwoot_inbox_id, chatwoot_api_token, timezone, working_hours, handover_keywords,
+        agent_timeout_seconds, session_timeout_hours,
+        monthly_credit_limit, per_conversation_message_limit, bonus_credits, credit_limit_message, auto_escalate_media)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
        RETURNING *`,
       [
         input.slug,
@@ -86,6 +88,11 @@ export const tenantRepository = {
         input.handover_keywords || ['zelim da pricam sa covekom', 'hocu operatera', 'agent', 'covek', 'operater'],
         input.agent_timeout_seconds ?? 180,
         input.session_timeout_hours ?? 24,
+        input.monthly_credit_limit ?? null,
+        input.per_conversation_message_limit ?? null,
+        input.bonus_credits ?? 0,
+        input.credit_limit_message ?? null,
+        input.auto_escalate_media ?? true,
       ]
     );
     return decryptTenantTokens(rows[0]);
@@ -163,6 +170,26 @@ export const tenantRepository = {
     if (input.session_timeout_hours !== undefined) {
       fields.push(`session_timeout_hours = $${idx++}`);
       values.push(input.session_timeout_hours);
+    }
+    if (input.monthly_credit_limit !== undefined) {
+      fields.push(`monthly_credit_limit = $${idx++}`);
+      values.push(input.monthly_credit_limit);
+    }
+    if (input.per_conversation_message_limit !== undefined) {
+      fields.push(`per_conversation_message_limit = $${idx++}`);
+      values.push(input.per_conversation_message_limit);
+    }
+    if (input.bonus_credits !== undefined) {
+      fields.push(`bonus_credits = $${idx++}`);
+      values.push(input.bonus_credits);
+    }
+    if (input.credit_limit_message !== undefined) {
+      fields.push(`credit_limit_message = $${idx++}`);
+      values.push(input.credit_limit_message);
+    }
+    if (input.auto_escalate_media !== undefined) {
+      fields.push(`auto_escalate_media = $${idx++}`);
+      values.push(input.auto_escalate_media);
     }
     if (input.status !== undefined) {
       fields.push(`status = $${idx++}`);

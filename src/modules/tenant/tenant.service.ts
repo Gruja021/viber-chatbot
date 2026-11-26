@@ -30,6 +30,11 @@ interface TenantCacheEntry {
   session_timeout_hours: number;
   chatwoot_setup_status: string;
   chatwoot_setup_error: string | null;
+  monthly_credit_limit: number | null;
+  credits_used: number;
+  bonus_credits: number;
+  per_conversation_message_limit: number | null;
+  auto_escalate_media: boolean;
   status: string;
   created_at: Date;
   updated_at: Date;
@@ -57,6 +62,11 @@ function toCacheEntry(tenant: Tenant): TenantCacheEntry {
     session_timeout_hours: tenant.session_timeout_hours,
     chatwoot_setup_status: tenant.chatwoot_setup_status || 'none',
     chatwoot_setup_error: tenant.chatwoot_setup_error || null,
+    monthly_credit_limit: tenant.monthly_credit_limit,
+    credits_used: tenant.credits_used,
+    bonus_credits: tenant.bonus_credits,
+    per_conversation_message_limit: tenant.per_conversation_message_limit,
+    auto_escalate_media: tenant.auto_escalate_media,
     status: tenant.status,
     created_at: tenant.created_at,
     updated_at: tenant.updated_at,
@@ -84,6 +94,13 @@ function toPublic(tenant: Tenant): TenantPublic {
     session_timeout_hours: tenant.session_timeout_hours,
     chatwoot_setup_status: tenant.chatwoot_setup_status || 'none',
     chatwoot_setup_error: tenant.chatwoot_setup_error || null,
+    monthly_credit_limit: tenant.monthly_credit_limit,
+    credits_used: tenant.credits_used,
+    bonus_credits: tenant.bonus_credits,
+    credits_reset_at: tenant.credits_reset_at,
+    per_conversation_message_limit: tenant.per_conversation_message_limit,
+    credit_limit_message: tenant.credit_limit_message,
+    auto_escalate_media: tenant.auto_escalate_media,
     status: tenant.status,
     created_at: tenant.created_at,
     updated_at: tenant.updated_at,

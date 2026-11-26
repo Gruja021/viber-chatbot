@@ -5,6 +5,7 @@ import { pool } from './config/database';
 import { redis } from './config/redis';
 import { startAgentTimeoutListener, stopAgentTimeoutListener } from './modules/agent-timeout/agent-timeout.listener';
 import { startDataRetentionScheduler, stopDataRetentionScheduler } from './modules/data-retention/data-retention.scheduler';
+import { startCreditResetScheduler, stopCreditResetScheduler } from './modules/ai-credits/ai-credits.scheduler';
 
 async function start() {
   const server = app.listen(env.PORT, () => {
@@ -17,11 +18,15 @@ async function start() {
   // Start data retention scheduler (checks hourly, runs cleanup at 3 AM UTC)
   startDataRetentionScheduler();
 
+  // Start credit reset scheduler (checks hourly, resets on 1st of month at 1 AM UTC)
+  startCreditResetScheduler();
+
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutting down gracefully');
     server.close(async () => {
       stopAgentTimeoutListener();
       stopDataRetentionScheduler();
+      stopCreditResetScheduler();
       await pool.end();
       redis.disconnect();
       logger.info('Server stopped');

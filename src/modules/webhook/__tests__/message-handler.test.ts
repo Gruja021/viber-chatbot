@@ -4,6 +4,7 @@ import { chatwootService } from '../../chatwoot/chatwoot.service';
 import { aiService } from '../../ai/ai.service';
 import * as businessHoursService from '../../business-hours/business-hours.service';
 import { agentTimeoutService } from '../../agent-timeout/agent-timeout.service';
+import { aiCreditsService } from '../../ai-credits/ai-credits.service';
 import { PlatformMessenger, PlatformSender } from '../../../types/platform';
 
 jest.mock('../../conversation/conversation.service');
@@ -11,12 +12,14 @@ jest.mock('../../chatwoot/chatwoot.service');
 jest.mock('../../ai/ai.service');
 jest.mock('../../business-hours/business-hours.service');
 jest.mock('../../agent-timeout/agent-timeout.service');
+jest.mock('../../ai-credits/ai-credits.service');
 
 const mockConversationService = conversationService as jest.Mocked<typeof conversationService>;
 const mockChatwootService = chatwootService as jest.Mocked<typeof chatwootService>;
 const mockAiService = aiService as jest.Mocked<typeof aiService>;
 const mockBusinessHours = businessHoursService as jest.Mocked<typeof businessHoursService>;
 const mockAgentTimeout = agentTimeoutService as jest.Mocked<typeof agentTimeoutService>;
+const mockAiCredits = aiCreditsService as jest.Mocked<typeof aiCreditsService>;
 
 const mockMessenger: jest.Mocked<PlatformMessenger> = {
   sendTextMessage: jest.fn().mockResolvedValue(undefined),
@@ -51,6 +54,9 @@ describe('message-handler', () => {
     jest.clearAllMocks();
     mockBusinessHours.isWithinWorkingHours.mockReturnValue(false);
     mockBusinessHours.matchesHandoverKeyword.mockReturnValue(false);
+    // Default: credits always allowed, deduction succeeds
+    mockAiCredits.checkCredits.mockResolvedValue({ allowed: true });
+    mockAiCredits.deductCredits.mockResolvedValue(true);
   });
 
   describe('handleWelcomeMessage', () => {
@@ -148,7 +154,7 @@ describe('message-handler', () => {
       mockConversationService.getOrCreate.mockResolvedValue(conv as any);
       mockConversationService.addMessage.mockResolvedValue({} as any);
       mockConversationService.getRecentMessages.mockResolvedValue([]);
-      mockAiService.generateResponse.mockResolvedValue({ text: 'AI odgovor', shouldEscalate: false });
+      mockAiService.generateResponse.mockResolvedValue({ text: 'AI odgovor', shouldEscalate: false, usedDatabaseSearch: false, tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } });
 
       await handleIncomingMessage(makeTenant({ chatwoot_api_token: null }), makeSender(), 'Zdravo!', '555', mockMessenger);
 
@@ -170,6 +176,8 @@ describe('message-handler', () => {
         text: 'Za ovo pitanje bi bilo najbolje...',
         shouldEscalate: true,
         escalationReason: 'Complex issue',
+        usedDatabaseSearch: false,
+        tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       });
 
       await handleIncomingMessage(makeTenant(), makeSender(), 'Komplikovano pitanje', '555', mockMessenger);
@@ -190,7 +198,7 @@ describe('message-handler', () => {
       mockConversationService.addMessage.mockResolvedValue({} as any);
       mockConversationService.getRecentMessages.mockResolvedValue([]);
       mockChatwootService.sendMessage.mockResolvedValue(undefined);
-      mockAiService.generateResponse.mockResolvedValue({ text: 'AI reply', shouldEscalate: false });
+      mockAiService.generateResponse.mockResolvedValue({ text: 'AI reply', shouldEscalate: false, usedDatabaseSearch: false, tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } });
       mockBusinessHours.isWithinWorkingHours.mockReturnValue(true);
 
       await handleIncomingMessage(
@@ -219,6 +227,8 @@ describe('message-handler', () => {
         text: 'Prosleđujem vam...',
         shouldEscalate: true,
         escalationReason: 'Cannot resolve',
+        usedDatabaseSearch: false,
+        tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       });
       mockBusinessHours.isWithinWorkingHours.mockReturnValue(true);
 
@@ -298,7 +308,7 @@ describe('message-handler', () => {
       mockConversationService.getOrCreate.mockResolvedValue(conv as any);
       mockConversationService.addMessage.mockResolvedValue({} as any);
       mockConversationService.getRecentMessages.mockResolvedValue([]);
-      mockAiService.generateResponse.mockResolvedValue({ text: 'AI fallback', shouldEscalate: false });
+      mockAiService.generateResponse.mockResolvedValue({ text: 'AI fallback', shouldEscalate: false, usedDatabaseSearch: false, tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } });
       mockBusinessHours.isWithinWorkingHours.mockReturnValue(true);
 
       await handleIncomingMessage(
@@ -320,7 +330,7 @@ describe('message-handler', () => {
       mockConversationService.getOrCreate.mockResolvedValue(conv as any);
       mockConversationService.addMessage.mockResolvedValue({} as any);
       mockConversationService.getRecentMessages.mockResolvedValue([]);
-      mockAiService.generateResponse.mockResolvedValue({ text: 'AI odgovor', shouldEscalate: false });
+      mockAiService.generateResponse.mockResolvedValue({ text: 'AI odgovor', shouldEscalate: false, usedDatabaseSearch: false, tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } });
 
       await handleIncomingMessage(
         makeTenant({ chatwoot_api_token: null, session_timeout_hours: 48 }),
@@ -390,7 +400,7 @@ describe('message-handler', () => {
       mockConversationService.addMessage.mockResolvedValue({} as any);
       mockConversationService.getRecentMessages.mockResolvedValue([]);
       mockChatwootService.sendMessage.mockResolvedValue(undefined);
-      mockAiService.generateResponse.mockResolvedValue({ text: 'AI odgovor', shouldEscalate: false });
+      mockAiService.generateResponse.mockResolvedValue({ text: 'AI odgovor', shouldEscalate: false, usedDatabaseSearch: false, tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } });
 
       await handleIncomingMessage(makeTenant(), makeSender(), 'Zdravo', '100', mockMessenger);
 
@@ -420,7 +430,7 @@ describe('message-handler', () => {
       mockConversationService.addMessage.mockResolvedValue({} as any);
       mockConversationService.getRecentMessages.mockResolvedValue([]);
       mockChatwootService.sendMessage.mockResolvedValue(undefined);
-      mockAiService.generateResponse.mockResolvedValue({ text: 'AI reply', shouldEscalate: false });
+      mockAiService.generateResponse.mockResolvedValue({ text: 'AI reply', shouldEscalate: false, usedDatabaseSearch: false, tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } });
       mockBusinessHours.isWithinWorkingHours.mockReturnValue(true);
 
       await handleIncomingMessage(
@@ -457,7 +467,7 @@ describe('message-handler', () => {
       mockConversationService.addMessage.mockResolvedValue({} as any);
       mockConversationService.getRecentMessages.mockResolvedValue([]);
       mockConversationService.setStatus.mockResolvedValue(undefined);
-      mockAiService.generateResponse.mockResolvedValue({ text: 'Resolved', shouldEscalate: false });
+      mockAiService.generateResponse.mockResolvedValue({ text: 'Resolved', shouldEscalate: false, usedDatabaseSearch: false, tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } });
 
       // Note: pending_human won't be hit because step 4 catches it first.
       // Use a non-standard status scenario: conversation_status = 'ai_active' but check the flow
@@ -484,7 +494,7 @@ describe('message-handler', () => {
       mockConversationService.getOrCreate.mockResolvedValue(conv as any);
       mockConversationService.addMessage.mockResolvedValue({} as any);
       mockConversationService.getRecentMessages.mockResolvedValue([]);
-      mockAiService.generateResponse.mockResolvedValue({ text: 'Telegram AI reply', shouldEscalate: false });
+      mockAiService.generateResponse.mockResolvedValue({ text: 'Telegram AI reply', shouldEscalate: false, usedDatabaseSearch: false, tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } });
 
       const sender = makeSender({ platform: 'telegram', userId: '456' });
       const tenant = makeTenant({ chatwoot_api_token: null });
@@ -493,6 +503,212 @@ describe('message-handler', () => {
 
       expect(mockConversationService.getOrCreate).toHaveBeenCalledWith('t-1', 'telegram', '456', 'Test User', 24);
       expect(mockMessenger.sendTextMessage).toHaveBeenCalledWith(tenant, '456', 'Telegram AI reply');
+    });
+  });
+
+  describe('handleIncomingMessage — AI credit limits', () => {
+    it('sends fallback message when monthly credit limit reached', async () => {
+      const conv = { id: 'conv-1', conversation_status: 'ai_active', chatwoot_conversation_id: 42 };
+      mockConversationService.getOrCreate.mockResolvedValue(conv as any);
+      mockConversationService.addMessage.mockResolvedValue({} as any);
+      mockConversationService.setStatus.mockResolvedValue(undefined);
+      mockConversationService.setHandover.mockResolvedValue(undefined);
+      mockChatwootService.addInternalNote.mockResolvedValue(undefined);
+      mockAiCredits.checkCredits.mockResolvedValue({ allowed: false, reason: 'Limit dostignut' });
+
+      await handleIncomingMessage(makeTenant(), makeSender(), 'Pitanje', '100', mockMessenger);
+
+      expect(mockAiService.generateResponse).not.toHaveBeenCalled();
+      expect(mockMessenger.sendTextMessage).toHaveBeenCalledWith(expect.anything(), 'user-1', 'Limit dostignut');
+      expect(mockConversationService.setStatus).toHaveBeenCalledWith('conv-1', 'human_active');
+      expect(mockChatwootService.addInternalNote).toHaveBeenCalledWith(
+        expect.objectContaining({ content: expect.stringContaining('AI Credit Limit') })
+      );
+    });
+
+    it('deducts credits after successful AI response', async () => {
+      const conv = { id: 'conv-1', conversation_status: 'ai_active', chatwoot_conversation_id: null };
+      mockConversationService.getOrCreate.mockResolvedValue(conv as any);
+      mockConversationService.addMessage.mockResolvedValue({} as any);
+      mockConversationService.getRecentMessages.mockResolvedValue([]);
+      mockAiService.generateResponse.mockResolvedValue({
+        text: 'AI reply',
+        shouldEscalate: false,
+        usedDatabaseSearch: false,
+        tokenUsage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      });
+
+      await handleIncomingMessage(
+        makeTenant({ chatwoot_api_token: null }),
+        makeSender(),
+        'test',
+        '100',
+        mockMessenger
+      );
+
+      expect(mockAiCredits.deductCredits).toHaveBeenCalledWith(
+        't-1', 'conv-1', 'text_response',
+        { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+        'gpt-4o-mini'
+      );
+    });
+
+    it('deducts database_search credits when AI used search', async () => {
+      const conv = { id: 'conv-1', conversation_status: 'ai_active', chatwoot_conversation_id: null };
+      mockConversationService.getOrCreate.mockResolvedValue(conv as any);
+      mockConversationService.addMessage.mockResolvedValue({} as any);
+      mockConversationService.getRecentMessages.mockResolvedValue([]);
+      mockAiService.generateResponse.mockResolvedValue({
+        text: 'Search result',
+        shouldEscalate: false,
+        usedDatabaseSearch: true,
+        tokenUsage: { promptTokens: 200, completionTokens: 100, totalTokens: 300 },
+      });
+
+      await handleIncomingMessage(
+        makeTenant({ chatwoot_api_token: null }),
+        makeSender(),
+        'search',
+        '100',
+        mockMessenger
+      );
+
+      expect(mockAiCredits.deductCredits).toHaveBeenCalledWith(
+        't-1', 'conv-1', 'database_search',
+        expect.any(Object),
+        'gpt-4o-mini'
+      );
+    });
+
+    it('sends fallback with default message when no custom message set', async () => {
+      const conv = { id: 'conv-1', conversation_status: 'ai_active', chatwoot_conversation_id: null };
+      mockConversationService.getOrCreate.mockResolvedValue(conv as any);
+      mockConversationService.addMessage.mockResolvedValue({} as any);
+      mockAiCredits.checkCredits.mockResolvedValue({ allowed: false });
+
+      await handleIncomingMessage(
+        makeTenant({ chatwoot_api_token: null }),
+        makeSender(),
+        'test',
+        '100',
+        mockMessenger
+      );
+
+      expect(mockMessenger.sendTextMessage).toHaveBeenCalledWith(
+        expect.anything(),
+        'user-1',
+        expect.stringContaining('prosleđena našem timu')
+      );
+    });
+
+    it('credit check in AI-First mode during working hours', async () => {
+      const conv = { id: 'conv-1', conversation_status: 'ai_active', chatwoot_conversation_id: 42 };
+      mockConversationService.getOrCreate.mockResolvedValue(conv as any);
+      mockConversationService.addMessage.mockResolvedValue({} as any);
+      mockConversationService.setStatus.mockResolvedValue(undefined);
+      mockConversationService.setHandover.mockResolvedValue(undefined);
+      mockChatwootService.sendMessage.mockResolvedValue(undefined);
+      mockChatwootService.addInternalNote.mockResolvedValue(undefined);
+      mockAiCredits.checkCredits.mockResolvedValue({ allowed: false, reason: 'Credits exhausted' });
+      mockBusinessHours.isWithinWorkingHours.mockReturnValue(true);
+
+      await handleIncomingMessage(
+        makeTenant({ agent_timeout_seconds: 0 }),
+        makeSender(),
+        'question',
+        '100',
+        mockMessenger
+      );
+
+      expect(mockAiService.generateResponse).not.toHaveBeenCalled();
+      expect(mockMessenger.sendTextMessage).toHaveBeenCalledWith(expect.anything(), 'user-1', 'Credits exhausted');
+    });
+
+    it('does not set human_active when credit limit reached and no Chatwoot', async () => {
+      const conv = { id: 'conv-1', conversation_status: 'ai_active', chatwoot_conversation_id: null };
+      mockConversationService.getOrCreate.mockResolvedValue(conv as any);
+      mockConversationService.addMessage.mockResolvedValue({} as any);
+      mockAiCredits.checkCredits.mockResolvedValue({ allowed: false, reason: 'Credits exhausted' });
+
+      await handleIncomingMessage(
+        makeTenant({ chatwoot_api_token: null }),
+        makeSender(),
+        'test',
+        '100',
+        mockMessenger
+      );
+
+      expect(mockAiService.generateResponse).not.toHaveBeenCalled();
+      expect(mockMessenger.sendTextMessage).toHaveBeenCalledWith(expect.anything(), 'user-1', 'Credits exhausted');
+      // Should NOT set human_active since there's no Chatwoot to escalate to
+      expect(mockConversationService.setStatus).not.toHaveBeenCalled();
+      expect(mockChatwootService.addInternalNote).not.toHaveBeenCalled();
+    });
+
+    it('sets human_active when credit limit reached and Chatwoot is available', async () => {
+      const conv = { id: 'conv-1', conversation_status: 'ai_active', chatwoot_conversation_id: 42 };
+      mockConversationService.getOrCreate.mockResolvedValue(conv as any);
+      mockConversationService.addMessage.mockResolvedValue({} as any);
+      mockConversationService.setStatus.mockResolvedValue(undefined);
+      mockConversationService.setHandover.mockResolvedValue(undefined);
+      mockChatwootService.addInternalNote.mockResolvedValue(undefined);
+      mockAiCredits.checkCredits.mockResolvedValue({ allowed: false, reason: 'Limit dostignut' });
+
+      await handleIncomingMessage(makeTenant(), makeSender(), 'Pitanje', '100', mockMessenger);
+
+      expect(mockConversationService.setStatus).toHaveBeenCalledWith('conv-1', 'human_active');
+      expect(mockConversationService.setHandover).toHaveBeenCalledWith('conv-1', 1440);
+      expect(mockChatwootService.addInternalNote).toHaveBeenCalledWith(
+        expect.objectContaining({ content: expect.stringContaining('AI Credit Limit') })
+      );
+    });
+
+    it('passes conversation.id to checkCredits', async () => {
+      const conv = { id: 'conv-42', conversation_status: 'ai_active', chatwoot_conversation_id: null };
+      mockConversationService.getOrCreate.mockResolvedValue(conv as any);
+      mockConversationService.addMessage.mockResolvedValue({} as any);
+      mockConversationService.getRecentMessages.mockResolvedValue([]);
+      mockAiService.generateResponse.mockResolvedValue({
+        text: 'Reply', shouldEscalate: false, usedDatabaseSearch: false,
+        tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      });
+
+      await handleIncomingMessage(
+        makeTenant({ chatwoot_api_token: null }),
+        makeSender(),
+        'test',
+        '100',
+        mockMessenger
+      );
+
+      expect(mockAiCredits.checkCredits).toHaveBeenCalledWith('t-1', 'conv-42', 'text_response');
+    });
+
+    it('uses tenant openai_model for credit logging', async () => {
+      const conv = { id: 'conv-1', conversation_status: 'ai_active', chatwoot_conversation_id: null };
+      mockConversationService.getOrCreate.mockResolvedValue(conv as any);
+      mockConversationService.addMessage.mockResolvedValue({} as any);
+      mockConversationService.getRecentMessages.mockResolvedValue([]);
+      mockAiService.generateResponse.mockResolvedValue({
+        text: 'Reply',
+        shouldEscalate: false,
+        usedDatabaseSearch: false,
+        tokenUsage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+      });
+
+      await handleIncomingMessage(
+        makeTenant({ chatwoot_api_token: null, openai_model: 'gpt-4o' }),
+        makeSender(),
+        'test',
+        '100',
+        mockMessenger
+      );
+
+      expect(mockAiCredits.deductCredits).toHaveBeenCalledWith(
+        't-1', 'conv-1', 'text_response',
+        expect.any(Object),
+        'gpt-4o'
+      );
     });
   });
 });

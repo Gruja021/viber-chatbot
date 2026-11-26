@@ -3,13 +3,16 @@ import { app } from '../../../app';
 import { tenantService } from '../tenant.service';
 import { checkTenantHealth } from '../tenant.health';
 import { chatwootProvisioningService } from '../../chatwoot/chatwoot.provisioning';
+import { aiCreditsService } from '../../ai-credits/ai-credits.service';
 
 jest.mock('../tenant.service');
 jest.mock('../tenant.health');
 jest.mock('../../chatwoot/chatwoot.provisioning');
+jest.mock('../../ai-credits/ai-credits.service');
 const mockService = tenantService as jest.Mocked<typeof tenantService>;
 const mockCheckTenantHealth = checkTenantHealth as jest.MockedFunction<typeof checkTenantHealth>;
 const mockProvisioning = chatwootProvisioningService as jest.Mocked<typeof chatwootProvisioningService>;
+const mockAiCredits = aiCreditsService as jest.Mocked<typeof aiCreditsService>;
 
 const AUTH_HEADER = `Bearer test-admin-token`;
 
@@ -256,6 +259,78 @@ describe('tenant.routes integration', () => {
     });
   });
 
+  describe('PUT /api/tenants/:id with credit fields', () => {
+    it('updates monthly_credit_limit', async () => {
+      mockService.update.mockResolvedValue({ ...mockPublicTenant, monthly_credit_limit: 500 } as any);
+
+      const res = await request(app)
+        .put('/api/tenants/uuid-1')
+        .set('Authorization', AUTH_HEADER)
+        .send({ monthly_credit_limit: 500 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.monthly_credit_limit).toBe(500);
+    });
+
+    it('updates per_conversation_message_limit', async () => {
+      mockService.update.mockResolvedValue({ ...mockPublicTenant, per_conversation_message_limit: 10 } as any);
+
+      const res = await request(app)
+        .put('/api/tenants/uuid-1')
+        .set('Authorization', AUTH_HEADER)
+        .send({ per_conversation_message_limit: 10 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.per_conversation_message_limit).toBe(10);
+    });
+
+    it('updates bonus_credits', async () => {
+      mockService.update.mockResolvedValue({ ...mockPublicTenant, bonus_credits: 50 } as any);
+
+      const res = await request(app)
+        .put('/api/tenants/uuid-1')
+        .set('Authorization', AUTH_HEADER)
+        .send({ bonus_credits: 50 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.bonus_credits).toBe(50);
+    });
+
+    it('updates credit_limit_message', async () => {
+      mockService.update.mockResolvedValue({ ...mockPublicTenant, credit_limit_message: 'Custom msg' } as any);
+
+      const res = await request(app)
+        .put('/api/tenants/uuid-1')
+        .set('Authorization', AUTH_HEADER)
+        .send({ credit_limit_message: 'Custom msg' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.credit_limit_message).toBe('Custom msg');
+    });
+
+    it('updates auto_escalate_media', async () => {
+      mockService.update.mockResolvedValue({ ...mockPublicTenant, auto_escalate_media: false } as any);
+
+      const res = await request(app)
+        .put('/api/tenants/uuid-1')
+        .set('Authorization', AUTH_HEADER)
+        .send({ auto_escalate_media: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body.auto_escalate_media).toBe(false);
+    });
+
+    it('rejects invalid credit fields on update', async () => {
+      const res = await request(app)
+        .put('/api/tenants/uuid-1')
+        .set('Authorization', AUTH_HEADER)
+        .send({ monthly_credit_limit: -5 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('monthly_credit_limit');
+    });
+  });
+
   describe('PUT /api/tenants/:id with agent_timeout_seconds', () => {
     it('returns 200 when updating agent_timeout_seconds', async () => {
       mockService.update.mockResolvedValue({ ...mockPublicTenant, agent_timeout_seconds: 300 } as any);
@@ -482,6 +557,238 @@ describe('tenant.routes integration', () => {
     });
   });
 
+  describe('POST /api/tenants with credit limit fields', () => {
+    it('accepts valid monthly_credit_limit', async () => {
+      mockService.create.mockResolvedValue(mockPublicTenant as any);
+
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'credit-co',
+          firm_name: 'Credit Co',
+          monthly_credit_limit: 500,
+        });
+
+      expect(res.status).toBe(201);
+    });
+
+    it('rejects negative monthly_credit_limit', async () => {
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'bad-co',
+          firm_name: 'Bad Co',
+          monthly_credit_limit: -1,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('monthly_credit_limit');
+    });
+
+    it('accepts null monthly_credit_limit (unlimited)', async () => {
+      mockService.create.mockResolvedValue(mockPublicTenant as any);
+
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'unlimited-co',
+          firm_name: 'Unlimited Co',
+          monthly_credit_limit: null,
+        });
+
+      expect(res.status).toBe(201);
+    });
+
+    it('rejects monthly_credit_limit over 10000000', async () => {
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'over-limit',
+          firm_name: 'Over Limit Co',
+          monthly_credit_limit: 10000001,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('monthly_credit_limit');
+    });
+
+    it('rejects negative per_conversation_message_limit', async () => {
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'neg-per-conv',
+          firm_name: 'Neg Per Conv Co',
+          per_conversation_message_limit: -1,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('per_conversation_message_limit');
+    });
+
+    it('rejects per_conversation_message_limit of 0', async () => {
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'zero-conv',
+          firm_name: 'Zero Conv Co',
+          per_conversation_message_limit: 0,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('per_conversation_message_limit');
+    });
+
+    it('rejects per_conversation_message_limit over 10000', async () => {
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'over-conv',
+          firm_name: 'Over Conv Co',
+          per_conversation_message_limit: 10001,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('per_conversation_message_limit');
+    });
+
+    it('accepts valid per_conversation_message_limit', async () => {
+      mockService.create.mockResolvedValue(mockPublicTenant as any);
+
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'valid-conv',
+          firm_name: 'Valid Conv Co',
+          per_conversation_message_limit: 50,
+        });
+
+      expect(res.status).toBe(201);
+    });
+
+    it('rejects negative bonus_credits', async () => {
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'neg-bonus',
+          firm_name: 'Neg Bonus Co',
+          bonus_credits: -1,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('bonus_credits');
+    });
+
+    it('rejects bonus_credits over 10000000', async () => {
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'over-bonus',
+          firm_name: 'Over Bonus Co',
+          bonus_credits: 10000001,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('bonus_credits');
+    });
+
+    it('accepts valid bonus_credits', async () => {
+      mockService.create.mockResolvedValue(mockPublicTenant as any);
+
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'good-bonus',
+          firm_name: 'Good Bonus Co',
+          bonus_credits: 500,
+        });
+
+      expect(res.status).toBe(201);
+    });
+
+    it('rejects credit_limit_message over 1000 chars', async () => {
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'long-msg',
+          firm_name: 'Long Msg Co',
+          credit_limit_message: 'x'.repeat(1001),
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('credit_limit_message');
+    });
+
+    it('rejects non-string credit_limit_message', async () => {
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'num-msg',
+          firm_name: 'Num Msg Co',
+          credit_limit_message: 12345,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('credit_limit_message');
+    });
+
+    it('accepts valid credit_limit_message', async () => {
+      mockService.create.mockResolvedValue(mockPublicTenant as any);
+
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'good-msg',
+          firm_name: 'Good Msg Co',
+          credit_limit_message: 'Custom message for credits exhausted.',
+        });
+
+      expect(res.status).toBe(201);
+    });
+
+    it('accepts null credit_limit_message', async () => {
+      mockService.create.mockResolvedValue(mockPublicTenant as any);
+
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'null-msg',
+          firm_name: 'Null Msg Co',
+          credit_limit_message: null,
+        });
+
+      expect(res.status).toBe(201);
+    });
+
+    it('rejects invalid auto_escalate_media type', async () => {
+      const res = await request(app)
+        .post('/api/tenants')
+        .set('Authorization', AUTH_HEADER)
+        .send({
+          slug: 'bad-bool',
+          firm_name: 'Bad Bool Co',
+          auto_escalate_media: 'yes',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('auto_escalate_media');
+    });
+  });
+
   describe('POST /api/tenants with auto_setup_chatwoot', () => {
     it('passes auto_setup_chatwoot to service create', async () => {
       mockService.create.mockResolvedValue(mockPublicTenant as any);
@@ -519,6 +826,60 @@ describe('tenant.routes integration', () => {
       expect(mockService.create).toHaveBeenCalledWith(
         expect.objectContaining({ auto_setup_chatwoot: false })
       );
+    });
+  });
+
+  describe('GET /api/tenants/:id/credit-usage', () => {
+    it('returns 401 without auth token', async () => {
+      const res = await request(app).get('/api/tenants/uuid-1/credit-usage');
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 404 when tenant not found', async () => {
+      mockService.getPublicById.mockResolvedValue(null);
+
+      const res = await request(app)
+        .get('/api/tenants/nonexistent/credit-usage')
+        .set('Authorization', AUTH_HEADER);
+
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 500 when getUsageSummary throws', async () => {
+      mockService.getPublicById.mockResolvedValue(mockPublicTenant as any);
+      mockAiCredits.getUsageSummary.mockRejectedValue(new Error('DB error'));
+
+      const res = await request(app)
+        .get('/api/tenants/uuid-1/credit-usage')
+        .set('Authorization', AUTH_HEADER);
+
+      expect(res.status).toBe(500);
+    });
+
+    it('returns 200 with credit usage summary', async () => {
+      mockService.getPublicById.mockResolvedValue(mockPublicTenant as any);
+      mockAiCredits.getUsageSummary.mockResolvedValue({
+        tenant_id: 'uuid-1',
+        monthly_credit_limit: 100,
+        credits_used: 50,
+        bonus_credits: 0,
+        credits_remaining: 50,
+        credits_reset_at: null,
+        per_conversation_message_limit: null,
+        breakdown: [
+          { credit_type: 'text_response', total_credits: 40, count: 40 },
+          { credit_type: 'database_search', total_credits: 10, count: 5 },
+        ],
+      });
+
+      const res = await request(app)
+        .get('/api/tenants/uuid-1/credit-usage')
+        .set('Authorization', AUTH_HEADER);
+
+      expect(res.status).toBe(200);
+      expect(res.body.credits_used).toBe(50);
+      expect(res.body.credits_remaining).toBe(50);
+      expect(res.body.breakdown).toHaveLength(2);
     });
   });
 

@@ -600,6 +600,116 @@ describe('TenantFormComponent', () => {
     });
   });
 
+  // ---- AI Credit Limits ----
+  describe('AI Credit Limits', () => {
+    beforeEach(() => {
+      setup(null);
+      fixture.detectChanges();
+    });
+
+    it('should have default monthly_credit_limit null (unlimited)', () => {
+      expect(component.form.get('monthly_credit_limit')?.value).toBeNull();
+    });
+
+    it('should have default auto_escalate_media true', () => {
+      expect(component.form.get('auto_escalate_media')?.value).toBeTrue();
+    });
+
+    it('should have default bonus_credits 0', () => {
+      expect(component.form.get('bonus_credits')?.value).toBe(0);
+    });
+
+    it('should include credit fields in create payload', () => {
+      component.form.patchValue({
+        slug: 'credit-co',
+        firm_name: 'Credit Co',
+        monthly_credit_limit: 500,
+        per_conversation_message_limit: 10,
+        auto_escalate_media: false,
+      });
+      component.onSubmit();
+
+      const req = httpTesting.expectOne('/api/tenants');
+      expect(req.request.body.monthly_credit_limit).toBe(500);
+      expect(req.request.body.per_conversation_message_limit).toBe(10);
+      expect(req.request.body.auto_escalate_media).toBeFalse();
+      req.flush(makeTenant({ id: 'new-id', slug: 'credit-co' }));
+    });
+
+    it('should send null for empty monthly_credit_limit (unlimited)', () => {
+      component.form.patchValue({
+        slug: 'unlimited-co',
+        firm_name: 'Unlimited Co',
+        monthly_credit_limit: null,
+      });
+      component.onSubmit();
+
+      const req = httpTesting.expectOne('/api/tenants');
+      expect(req.request.body.monthly_credit_limit).toBeNull();
+      req.flush(makeTenant({ id: 'new-id', slug: 'unlimited-co' }));
+    });
+
+    it('should show AI Credit Limits section in form', () => {
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.textContent).toContain('AI Credit Limits');
+    });
+
+    it('should show auto escalate media checkbox', () => {
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.textContent).toContain('Automatically forward images');
+    });
+  });
+
+  describe('AI Credit Limits in edit mode', () => {
+    it('should load credit fields from tenant', () => {
+      setup('tenant-1');
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(
+        makeTenant({
+          monthly_credit_limit: 1000,
+          per_conversation_message_limit: 20,
+          bonus_credits: 50,
+          credit_limit_message: 'Custom message',
+          auto_escalate_media: false,
+        })
+      );
+
+      expect(component.form.get('monthly_credit_limit')?.value).toBe(1000);
+      expect(component.form.get('per_conversation_message_limit')?.value).toBe(20);
+      expect(component.form.get('bonus_credits')?.value).toBe(50);
+      expect(component.form.get('credit_limit_message')?.value).toBe('Custom message');
+      expect(component.form.get('auto_escalate_media')?.value).toBeFalse();
+    });
+
+    it('should include credit fields in update payload', () => {
+      setup('tenant-1');
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+      component.form.patchValue({
+        monthly_credit_limit: 2000,
+        bonus_credits: 100,
+      });
+      component.onSubmit();
+
+      const req = httpTesting.expectOne('/api/tenants/tenant-1');
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body.monthly_credit_limit).toBe(2000);
+      expect(req.request.body.bonus_credits).toBe(100);
+      req.flush(makeTenant());
+    });
+
+    it('should show bonus_credits field only in edit mode', () => {
+      setup('tenant-1');
+      fixture.detectChanges();
+      httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.textContent).toContain('Bonus Credits');
+    });
+  });
+
   // ---- Data Sources card ----
   describe('Data Sources card', () => {
     it('should show "added after creation" hint in create mode', () => {

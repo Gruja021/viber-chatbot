@@ -80,6 +80,7 @@ export const conversationRepository = {
         agent_routed_at = NULL,
         chatwoot_conversation_id = NULL,
         reopen_count = 0,
+        ai_message_count = 0,
         updated_at = NOW()
       WHERE id = $1`,
       [id]

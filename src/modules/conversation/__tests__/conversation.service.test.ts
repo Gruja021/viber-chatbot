@@ -20,6 +20,7 @@ const makeConversation = (overrides: Partial<Conversation> = {}): Conversation =
   agent_routed_at: null,
   conversation_status: 'ai_active',
   reopen_count: 0,
+  ai_message_count: 0,
   created_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
   updated_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
   ...overrides,

@@ -8,6 +8,8 @@ import { viberService } from '../webhook/viber.service';
 import { telegramService } from '../webhook/telegram.service';
 import { chatwootService } from '../chatwoot/chatwoot.service';
 import { tenantService } from '../tenant/tenant.service';
+import { aiCreditsService } from '../ai-credits/ai-credits.service';
+import { CreditType } from '../ai-credits/ai-credits.types';
 
 const KEY_PREFIX = 'agent_timeout:';
 
@@ -92,22 +94,38 @@ async function handleTimeoutExpiry(conversationId: string): Promise<void> {
     return;
   }
 
-  // 4. Generate AI response
+  // 4. Credit check before AI call
+  const creditCheck = await aiCreditsService.checkCredits(data.tenantId, data.conversationId, 'text_response');
+  if (!creditCheck.allowed) {
+    logger.info({ tenantId: data.tenantId, conversationId }, 'AI credit limit reached on agent timeout fallback');
+    const fallbackMsg = creditCheck.reason || 'Vaša poruka je prosleđena našem timu. Javićemo vam se uskoro.';
+    await sendPlatformMessage(tenant, data.platform, data.platformUserId, fallbackMsg);
+    await conversationService.addMessage(data.conversationId, 'assistant', fallbackMsg);
+    await conversationService.setStatus(data.conversationId, 'human_active');
+    return;
+  }
+
+  // 5. Generate AI response
   const recentMessages = await conversationService.getRecentMessages(data.conversationId, 20);
   const aiResponse = await aiService.generateResponse(tenant, recentMessages, data.userMessage);
 
-  // 5. Send to correct platform
+  // 6. Deduct credits
+  const creditType: CreditType = aiResponse.usedDatabaseSearch ? 'database_search' : 'text_response';
+  const model = tenant.openai_model || 'gpt-4o-mini';
+  await aiCreditsService.deductCredits(data.tenantId, data.conversationId, creditType, aiResponse.tokenUsage, model);
+
+  // 7. Send to correct platform
   await sendPlatformMessage(tenant, data.platform, data.platformUserId, aiResponse.text);
 
-  // 6. Save assistant message
+  // 8. Save assistant message
   await conversationService.addMessage(data.conversationId, 'assistant', aiResponse.text);
 
-  // 7. If AI escalates, set human_active
+  // 9. If AI escalates, set human_active
   if (aiResponse.shouldEscalate) {
     await conversationService.setStatus(data.conversationId, 'human_active');
   }
 
-  // 8. Log in Chatwoot if available
+  // 10. Log in Chatwoot if available
   if (tenant.chatwoot_api_token) {
     const conversation = await conversationService.getOrCreate(
       data.tenantId,

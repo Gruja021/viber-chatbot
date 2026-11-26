@@ -15,6 +15,7 @@ export interface Conversation {
   agent_routed_at: Date | null;
   conversation_status: ConversationStatus;
   reopen_count: number;
+  ai_message_count: number;
   created_at: Date;
   updated_at: Date;
 }

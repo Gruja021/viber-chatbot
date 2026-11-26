@@ -239,6 +239,45 @@ const DAYS: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday
             </mat-card-content>
           </mat-card>
 
+          <!-- AI Credit Limits -->
+          <mat-card>
+            <mat-card-header><mat-card-title>AI Credit Limits</mat-card-title></mat-card-header>
+            <mat-card-content>
+              <div class="form-row">
+                <mat-form-field appearance="outline">
+                  <mat-label>Monthly Credit Limit</mat-label>
+                  <input matInput formControlName="monthly_credit_limit" type="number">
+                  <mat-hint>Leave empty for unlimited</mat-hint>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                  <mat-label>Per-Conversation Message Limit</mat-label>
+                  <input matInput formControlName="per_conversation_message_limit" type="number">
+                  <mat-hint>Leave empty for unlimited</mat-hint>
+                </mat-form-field>
+              </div>
+
+              @if (isEdit()) {
+                <mat-form-field appearance="outline">
+                  <mat-label>Bonus Credits</mat-label>
+                  <input matInput formControlName="bonus_credits" type="number">
+                  <mat-hint>Extra credits added on top of monthly limit (resets monthly)</mat-hint>
+                </mat-form-field>
+              }
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Credit Limit Message</mat-label>
+                <input matInput formControlName="credit_limit_message"
+                       placeholder="Custom message when credit limit is reached">
+                <mat-hint>Leave empty for default message</mat-hint>
+              </mat-form-field>
+
+              <mat-checkbox formControlName="auto_escalate_media">
+                Automatically forward images and files to agent (without AI analysis)
+              </mat-checkbox>
+            </mat-card-content>
+          </mat-card>
+
           <!-- Handover Keywords -->
           <mat-card>
             <mat-card-header><mat-card-title>Handover Keywords</mat-card-title></mat-card-header>
@@ -334,6 +373,11 @@ export class TenantFormComponent implements OnInit {
     chatwoot_api_token: [''],
     agent_timeout_seconds: [180, [Validators.min(0), Validators.max(3600)]],
     session_timeout_hours: [24, [Validators.min(1), Validators.max(168)]],
+    monthly_credit_limit: [null],
+    per_conversation_message_limit: [null],
+    bonus_credits: [0],
+    credit_limit_message: [''],
+    auto_escalate_media: [true],
     timezone: ['Europe/Belgrade'],
     working_hours: this.fb.group(
       DAYS.reduce((acc, day) => {
@@ -413,6 +457,11 @@ export class TenantFormComponent implements OnInit {
       chatwoot_api_token: raw.chatwoot_api_token || undefined,
       agent_timeout_seconds: raw.agent_timeout_seconds ?? undefined,
       session_timeout_hours: raw.session_timeout_hours ?? undefined,
+      monthly_credit_limit: raw.monthly_credit_limit !== null && raw.monthly_credit_limit !== '' ? Number(raw.monthly_credit_limit) : null,
+      per_conversation_message_limit: raw.per_conversation_message_limit !== null && raw.per_conversation_message_limit !== '' ? Number(raw.per_conversation_message_limit) : null,
+      bonus_credits: raw.bonus_credits ?? 0,
+      credit_limit_message: raw.credit_limit_message || null,
+      auto_escalate_media: raw.auto_escalate_media,
       timezone: raw.timezone || undefined,
       working_hours: Object.keys(workingHours).length ? workingHours : undefined,
       handover_keywords: this.handoverKeywords.length ? this.handoverKeywords : undefined,
@@ -473,6 +522,11 @@ export class TenantFormComponent implements OnInit {
           chatwoot_api_token: '',
           agent_timeout_seconds: t.agent_timeout_seconds ?? 180,
           session_timeout_hours: t.session_timeout_hours ?? 24,
+          monthly_credit_limit: t.monthly_credit_limit,
+          per_conversation_message_limit: t.per_conversation_message_limit,
+          bonus_credits: t.bonus_credits ?? 0,
+          credit_limit_message: t.credit_limit_message || '',
+          auto_escalate_media: t.auto_escalate_media ?? true,
           timezone: t.timezone || 'Europe/Belgrade',
         });
 

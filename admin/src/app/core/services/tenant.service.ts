@@ -7,6 +7,7 @@ import {
   UpdateTenantInput,
   TenantHealthResponse,
   SystemHealth,
+  CreditUsageSummary,
 } from '../models/tenant.model';
 import { environment } from '../../../environments/environment';
 
@@ -77,6 +78,12 @@ export class TenantService {
     return this.http.post<{ message: string; status: string }>(
       `${this.baseUrl}/api/tenants/${tenantId}/setup-chatwoot`,
       {}
+    );
+  }
+
+  getCreditUsage(tenantId: string): Observable<CreditUsageSummary> {
+    return this.http.get<CreditUsageSummary>(
+      `${this.baseUrl}/api/tenants/${tenantId}/credit-usage`
     );
   }
 }

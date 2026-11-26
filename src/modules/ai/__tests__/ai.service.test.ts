@@ -57,6 +57,13 @@ function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     session_timeout_hours: 24,
     chatwoot_setup_status: 'none',
     chatwoot_setup_error: null,
+    monthly_credit_limit: null,
+    credits_used: 0,
+    bonus_credits: 0,
+    credits_reset_at: null,
+    per_conversation_message_limit: null,
+    credit_limit_message: null,
+    auto_escalate_media: true,
     status: 'active',
     created_at: new Date(),
     updated_at: new Date(),
@@ -422,6 +429,173 @@ describe('aiService', () => {
       expect(OpenAI).toHaveBeenCalledWith(
         expect.objectContaining({ apiKey: 'sk-tenant-key' })
       );
+    });
+  });
+
+  describe('tokenUsage and usedDatabaseSearch tracking', () => {
+    it('returns tokenUsage with zeros when API response has no usage', async () => {
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
+      });
+
+      const result = await aiService.generateResponse(makeTenant(), [], 'test');
+
+      expect(result.tokenUsage).toEqual({
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      });
+      expect(result.usedDatabaseSearch).toBe(false);
+    });
+
+    it('returns tokenUsage from single API call', async () => {
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: 'Response' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
+      });
+
+      const result = await aiService.generateResponse(makeTenant(), [], 'test');
+
+      expect(result.tokenUsage).toEqual({
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150,
+      });
+    });
+
+    it('accumulates tokenUsage across function calling loop', async () => {
+      mockCreateConnector.mockReturnValue({
+        query: mockQuery,
+        testConnection: jest.fn(),
+      });
+
+      // First call: tool call with usage
+      mockCreate.mockResolvedValueOnce({
+        choices: [{
+          message: {
+            content: null,
+            tool_calls: [{
+              id: 'call-1', type: 'function',
+              function: { name: 'search_database', arguments: '{"search_term":"test"}' },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+        usage: { prompt_tokens: 80, completion_tokens: 20, total_tokens: 100 },
+      });
+
+      mockQuery.mockResolvedValue({
+        success: true, data: [{ name: 'Result' }], total_results: 1,
+        source: 'google_sheets', query_description: 'test',
+      });
+
+      // Second call: final response with usage
+      mockCreate.mockResolvedValueOnce({
+        choices: [{ message: { content: 'Found Result' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 150, completion_tokens: 40, total_tokens: 190 },
+      });
+
+      const result = await aiService.generateResponse(makeTenant(), [], 'test');
+
+      expect(result.tokenUsage).toEqual({
+        promptTokens: 230,    // 80 + 150
+        completionTokens: 60, // 20 + 40
+        totalTokens: 290,     // 100 + 190
+      });
+    });
+
+    it('sets usedDatabaseSearch=true when search_database is called', async () => {
+      mockCreateConnector.mockReturnValue({
+        query: mockQuery,
+        testConnection: jest.fn(),
+      });
+
+      mockCreate.mockResolvedValueOnce({
+        choices: [{
+          message: {
+            content: null,
+            tool_calls: [{
+              id: 'call-1', type: 'function',
+              function: { name: 'search_database', arguments: '{"search_term":"x"}' },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+      });
+
+      mockQuery.mockResolvedValue({
+        success: true, data: [], total_results: 0,
+        source: 'google_sheets', query_description: '',
+      });
+
+      mockCreate.mockResolvedValueOnce({
+        choices: [{ message: { content: 'No results' }, finish_reason: 'stop' }],
+      });
+
+      const result = await aiService.generateResponse(makeTenant(), [], 'x');
+      expect(result.usedDatabaseSearch).toBe(true);
+    });
+
+    it('sets usedDatabaseSearch=false when no database search is used', async () => {
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: 'Simple reply' }, finish_reason: 'stop' }],
+      });
+
+      const result = await aiService.generateResponse(makeTenant(), [], 'hello');
+      expect(result.usedDatabaseSearch).toBe(false);
+    });
+
+    it('returns tokenUsage in error response', async () => {
+      mockCreate.mockRejectedValue(new Error('Server error'));
+
+      const result = await aiService.generateResponse(makeTenant(), [], 'test');
+      expect(result.tokenUsage).toEqual({
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      });
+      expect(result.usedDatabaseSearch).toBe(false);
+    });
+
+    it('returns tokenUsage in empty content fallback', async () => {
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: null }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 50, completion_tokens: 0, total_tokens: 50 },
+      });
+
+      const result = await aiService.generateResponse(makeTenant(), [], 'test');
+      expect(result.tokenUsage).toEqual({
+        promptTokens: 50,
+        completionTokens: 0,
+        totalTokens: 50,
+      });
+    });
+
+    it('returns tokenUsage in escalation response', async () => {
+      mockCreate.mockResolvedValue({
+        choices: [{
+          message: {
+            content: null,
+            tool_calls: [{
+              id: 'call-esc', type: 'function',
+              function: { name: 'escalate_to_human', arguments: '{"reason":"Help"}' },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+        usage: { prompt_tokens: 60, completion_tokens: 10, total_tokens: 70 },
+      });
+
+      const result = await aiService.generateResponse(
+        makeTenant({ chatwoot_api_token: 'cw-token' }),
+        [], 'help'
+      );
+      expect(result.shouldEscalate).toBe(true);
+      expect(result.tokenUsage).toEqual({
+        promptTokens: 60,
+        completionTokens: 10,
+        totalTokens: 70,
+      });
     });
   });
 

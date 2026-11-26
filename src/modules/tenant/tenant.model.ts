@@ -32,6 +32,13 @@ export interface Tenant {
   session_timeout_hours: number;
   chatwoot_setup_status: ChatwootSetupStatus;
   chatwoot_setup_error: string | null;
+  monthly_credit_limit: number | null;
+  credits_used: number;
+  bonus_credits: number;
+  credits_reset_at: Date | null;
+  per_conversation_message_limit: number | null;
+  credit_limit_message: string | null;
+  auto_escalate_media: boolean;
   status: TenantStatus;
   created_at: Date;
   updated_at: Date;
@@ -55,6 +62,11 @@ export interface CreateTenantInput {
   handover_keywords?: string[];
   agent_timeout_seconds?: number;
   session_timeout_hours?: number;
+  monthly_credit_limit?: number | null;
+  per_conversation_message_limit?: number | null;
+  bonus_credits?: number;
+  credit_limit_message?: string | null;
+  auto_escalate_media?: boolean;
   auto_setup_chatwoot?: boolean;
 }
 
@@ -76,6 +88,11 @@ export interface UpdateTenantInput {
   handover_keywords?: string[];
   agent_timeout_seconds?: number;
   session_timeout_hours?: number;
+  monthly_credit_limit?: number | null;
+  per_conversation_message_limit?: number | null;
+  bonus_credits?: number;
+  credit_limit_message?: string | null;
+  auto_escalate_media?: boolean;
   status?: TenantStatus;
 }
 
@@ -99,6 +116,13 @@ export interface TenantPublic {
   session_timeout_hours: number;
   chatwoot_setup_status: ChatwootSetupStatus;
   chatwoot_setup_error: string | null;
+  monthly_credit_limit: number | null;
+  credits_used: number;
+  bonus_credits: number;
+  credits_reset_at: Date | null;
+  per_conversation_message_limit: number | null;
+  credit_limit_message: string | null;
+  auto_escalate_media: boolean;
   status: TenantStatus;
   created_at: Date;
   updated_at: Date;

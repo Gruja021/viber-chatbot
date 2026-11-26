@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { tenantService } from './tenant.service';
 import { checkTenantHealth } from './tenant.health';
 import { chatwootProvisioningService } from '../chatwoot/chatwoot.provisioning';
+import { aiCreditsService } from '../ai-credits/ai-credits.service';
 import { env } from '../../config/env';
 import { adminAuth } from '../../middleware/admin-auth';
 
@@ -78,6 +79,36 @@ function validateTenantInput(body: Record<string, unknown>, isCreate: boolean): 
     }
   }
 
+  // Credit limits
+  if (body.monthly_credit_limit !== undefined && body.monthly_credit_limit !== null) {
+    const val = Number(body.monthly_credit_limit);
+    if (isNaN(val) || val < 0 || val > 10000000) {
+      return 'monthly_credit_limit must be between 0 and 10000000, or null for unlimited';
+    }
+  }
+  if (body.per_conversation_message_limit !== undefined && body.per_conversation_message_limit !== null) {
+    const val = Number(body.per_conversation_message_limit);
+    if (isNaN(val) || val < 1 || val > 10000) {
+      return 'per_conversation_message_limit must be between 1 and 10000, or null for unlimited';
+    }
+  }
+  if (body.bonus_credits !== undefined) {
+    const val = Number(body.bonus_credits);
+    if (isNaN(val) || val < 0 || val > 10000000) {
+      return 'bonus_credits must be between 0 and 10000000';
+    }
+  }
+  if (body.credit_limit_message !== undefined && body.credit_limit_message !== null) {
+    if (typeof body.credit_limit_message !== 'string' || body.credit_limit_message.length > 1000) {
+      return 'credit_limit_message must be a string with max 1000 characters';
+    }
+  }
+  if (body.auto_escalate_media !== undefined) {
+    if (typeof body.auto_escalate_media !== 'boolean') {
+      return 'auto_escalate_media must be a boolean';
+    }
+  }
+
   // Timezone (basic IANA-like validation)
   if (body.timezone !== undefined) {
     if (typeof body.timezone !== 'string' || !/^[A-Za-z_]+\/[A-Za-z_]+/.test(body.timezone as string)) {
@@ -144,6 +175,22 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
       return;
     }
     res.json(tenant);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Credit usage ---
+
+router.get('/:id/credit-usage', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenant = await tenantService.getPublicById(req.params.id as string);
+    if (!tenant) {
+      res.status(404).json({ error: 'Tenant not found' });
+      return;
+    }
+    const usage = await aiCreditsService.getUsageSummary(req.params.id as string);
+    res.json(usage);
   } catch (err) {
     next(err);
   }

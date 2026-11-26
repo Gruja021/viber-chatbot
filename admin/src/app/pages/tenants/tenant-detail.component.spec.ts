@@ -671,6 +671,75 @@ describe('TenantDetailComponent', () => {
     expect((t as any).chatwoot_api_token).toBeUndefined();
   });
 
+  // AI Credit Usage section
+  it('should show AI Credit Usage section when monthly_credit_limit is set', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ monthly_credit_limit: 100, credits_used: 50, bonus_credits: 10 })
+    );
+
+    // Expect credit-usage API call since monthly_credit_limit is set
+    httpTesting.expectOne('/api/tenants/tenant-1/credit-usage').flush({
+      tenant_id: 'tenant-1',
+      monthly_credit_limit: 100,
+      credits_used: 50,
+      bonus_credits: 10,
+      credits_remaining: 60,
+      credits_reset_at: null,
+      per_conversation_message_limit: null,
+      breakdown: [],
+    });
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('AI Credit Usage');
+    expect(compiled.textContent).toContain('50 / 110 credits used');
+  });
+
+  it('should not show AI Credit Usage section when monthly_credit_limit is null', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ monthly_credit_limit: null })
+    );
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).not.toContain('AI Credit Usage');
+  });
+
+  it('should calculate credit percentage correctly', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(
+      makeTenant({ monthly_credit_limit: 100 })
+    );
+    httpTesting.expectOne('/api/tenants/tenant-1/credit-usage').flush({
+      tenant_id: 'tenant-1',
+      monthly_credit_limit: 100,
+      credits_used: 75,
+      bonus_credits: 0,
+      credits_remaining: 25,
+      credits_reset_at: null,
+      per_conversation_message_limit: null,
+      breakdown: [],
+    });
+
+    expect(component.getCreditPercentage()).toBe(75);
+  });
+
+  it('should format credit type labels', () => {
+    setup();
+    fixture.detectChanges();
+    httpTesting.expectOne('/api/tenants/tenant-1').flush(makeTenant());
+
+    expect(component.formatCreditType('text_response')).toBe('Text Responses');
+    expect(component.formatCreditType('database_search')).toBe('Database Searches');
+    expect(component.formatCreditType('image_analysis')).toBe('Image Analysis');
+    expect(component.formatCreditType('pdf_analysis')).toBe('PDF Analysis');
+  });
+
   it('should show Manage Connectors link in Data Sources section', () => {
     setup();
     fixture.detectChanges();

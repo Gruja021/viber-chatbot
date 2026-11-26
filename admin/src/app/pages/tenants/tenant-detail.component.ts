@@ -9,10 +9,11 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatListModule } from '@angular/material/list';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { NavbarComponent } from '../../shared/components/navbar.component';
 import { HealthBadgeComponent } from '../../shared/components/health-badge.component';
 import { TenantService } from '../../core/services/tenant.service';
-import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
+import { Tenant, TenantHealthResponse, CreditUsageSummary } from '../../core/models/tenant.model';
 
 @Component({
   selector: 'app-tenant-detail',
@@ -30,6 +31,7 @@ import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
     MatListModule,
     MatDividerModule,
     MatSnackBarModule,
+    MatProgressBarModule,
     NavbarComponent,
     HealthBadgeComponent,
   ],
@@ -244,6 +246,47 @@ import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
           </mat-card-actions>
         </mat-card>
 
+        <!-- AI Credit Usage -->
+        @if (tenant()!.monthly_credit_limit !== null) {
+          <mat-card>
+            <mat-card-header><mat-card-title>AI Credit Usage</mat-card-title></mat-card-header>
+            <mat-card-content>
+              @if (creditUsage()) {
+                <div class="credit-usage">
+                  <mat-progress-bar
+                    mode="determinate"
+                    [value]="getCreditPercentage()"
+                    [color]="getCreditPercentage() > 90 ? 'warn' : 'primary'">
+                  </mat-progress-bar>
+                  <p class="credit-text">
+                    {{ creditUsage()!.credits_used }} / {{ (creditUsage()!.monthly_credit_limit ?? 0) + (creditUsage()!.bonus_credits ?? 0) }} credits used
+                    ({{ creditUsage()!.credits_remaining ?? 0 }} remaining)
+                  </p>
+                  @if (creditUsage()!.bonus_credits > 0) {
+                    <p class="credit-bonus">+ {{ creditUsage()!.bonus_credits }} bonus credits</p>
+                  }
+                  @if (creditUsage()!.credits_reset_at) {
+                    <p class="credit-reset">Resets: {{ creditUsage()!.credits_reset_at | date:'mediumDate' }}</p>
+                  }
+                  @if (creditUsage()!.breakdown.length) {
+                    <h4 style="margin: 12px 0 4px;">Breakdown</h4>
+                    <mat-list dense>
+                      @for (item of creditUsage()!.breakdown; track item.credit_type) {
+                        <mat-list-item>
+                          <span matListItemTitle>{{ formatCreditType(item.credit_type) }}</span>
+                          <span matListItemLine>{{ item.total_credits }} credits ({{ item.count }} calls)</span>
+                        </mat-list-item>
+                      }
+                    </mat-list>
+                  }
+                </div>
+              } @else {
+                <p class="hint">Loading credit usage...</p>
+              }
+            </mat-card-content>
+          </mat-card>
+        }
+
         <!-- Working Hours -->
         @if (hasWorkingHours()) {
           <mat-card>
@@ -329,6 +372,10 @@ import { Tenant, TenantHealthResponse } from '../../core/models/tenant.model';
     .setup-pending { background: #fff3e0; color: #e65100; }
     .setup-failed { background: #fbe9e7; color: #c62828; }
     .setup-completed { background: #e8f5e9; color: #2e7d32; }
+    .credit-usage { margin: 8px 0; }
+    .credit-text { margin: 8px 0 4px; font-weight: 500; }
+    .credit-bonus { color: #2e7d32; font-size: 13px; margin: 0; }
+    .credit-reset { color: #666; font-size: 13px; margin: 4px 0 0; }
   `],
 })
 export class TenantDetailComponent implements OnInit {
@@ -344,10 +391,29 @@ export class TenantDetailComponent implements OnInit {
   webhookLoading = signal(false);
   testMessageLoading = signal(false);
   chatwootSetupLoading = signal(false);
+  creditUsage = signal<CreditUsageSummary | null>(null);
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
     if (id) this.loadTenant(id);
+  }
+
+  getCreditPercentage(): number {
+    const usage = this.creditUsage();
+    if (!usage || usage.monthly_credit_limit === null) return 0;
+    const total = usage.monthly_credit_limit + (usage.bonus_credits ?? 0);
+    if (total === 0) return 100;
+    return Math.min(100, Math.round((usage.credits_used / total) * 100));
+  }
+
+  formatCreditType(type: string): string {
+    const labels: Record<string, string> = {
+      text_response: 'Text Responses',
+      database_search: 'Database Searches',
+      image_analysis: 'Image Analysis',
+      pdf_analysis: 'PDF Analysis',
+    };
+    return labels[type] || type;
   }
 
   hasWorkingHours(): boolean {
@@ -475,10 +541,23 @@ export class TenantDetailComponent implements OnInit {
     });
   }
 
+  private loadCreditUsage(tenantId: string): void {
+    this.tenantService.getCreditUsage(tenantId).subscribe({
+      next: (usage) => this.creditUsage.set(usage),
+      error: () => { /* silently ignore */ },
+    });
+  }
+
   private loadTenant(id: string): void {
     this.loading.set(true);
     this.tenantService.getTenant(id).subscribe({
-      next: (t) => { this.tenant.set(t); this.loading.set(false); },
+      next: (t) => {
+        this.tenant.set(t);
+        this.loading.set(false);
+        if (t.monthly_credit_limit !== null) {
+          this.loadCreditUsage(t.id);
+        }
+      },
       error: () => {
         this.snackBar.open('Tenant not found', 'OK', { duration: 3000 });
         this.router.navigate(['/tenants']);

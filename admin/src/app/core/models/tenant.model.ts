@@ -30,6 +30,13 @@ export interface Tenant {
   session_timeout_hours: number;
   chatwoot_setup_status: ChatwootSetupStatus;
   chatwoot_setup_error: string | null;
+  monthly_credit_limit: number | null;
+  credits_used: number;
+  bonus_credits: number;
+  credits_reset_at: string | null;
+  per_conversation_message_limit: number | null;
+  credit_limit_message: string | null;
+  auto_escalate_media: boolean;
   status: TenantStatus;
   created_at: string;
   updated_at: string;
@@ -83,6 +90,11 @@ export interface CreateTenantInput {
   handover_keywords?: string[];
   agent_timeout_seconds?: number;
   session_timeout_hours?: number;
+  monthly_credit_limit?: number | null;
+  per_conversation_message_limit?: number | null;
+  bonus_credits?: number;
+  credit_limit_message?: string | null;
+  auto_escalate_media?: boolean;
   auto_setup_chatwoot?: boolean;
 }
 
@@ -107,6 +119,25 @@ export interface SystemHealth {
   database: 'connected' | 'disconnected';
   redis: 'connected' | 'disconnected';
   timestamp: string;
+}
+
+// --- AI Credit types ---
+
+export type CreditType = 'text_response' | 'database_search' | 'image_analysis' | 'pdf_analysis';
+
+export interface CreditUsageSummary {
+  tenant_id: string;
+  monthly_credit_limit: number | null;
+  credits_used: number;
+  bonus_credits: number;
+  credits_remaining: number | null;
+  credits_reset_at: string | null;
+  per_conversation_message_limit: number | null;
+  breakdown: {
+    credit_type: CreditType;
+    total_credits: number;
+    count: number;
+  }[];
 }
 
 // --- Multi-connector types ---
