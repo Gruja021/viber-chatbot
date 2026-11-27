@@ -3,6 +3,14 @@ import { Conversation, ConversationStatus, Message, MessageRole } from './conver
 import { Platform } from '../../types/platform';
 
 export const conversationRepository = {
+  async findById(conversationId: string): Promise<Conversation | null> {
+    const { rows } = await pool.query<Conversation>(
+      'SELECT * FROM conversations WHERE id = $1',
+      [conversationId]
+    );
+    return rows[0] || null;
+  },
+
   async findByTenantAndUser(tenantId: string, platform: Platform, platformUserId: string): Promise<Conversation | null> {
     const { rows } = await pool.query<Conversation>(
       'SELECT * FROM conversations WHERE tenant_id = $1 AND platform = $2 AND platform_user_id = $3',

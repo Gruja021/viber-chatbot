@@ -88,6 +88,13 @@ export const conversationService = {
 
   async setStatus(conversationId: string, status: ConversationStatus): Promise<void> {
     await conversationRepository.setStatus(conversationId, status);
+
+    // Invalidate cache so next getOrCreate reads fresh status from DB
+    const conv = await conversationRepository.findById(conversationId);
+    if (conv) {
+      const key = cacheKey(conv.tenant_id, conv.platform, conv.platform_user_id);
+      await redis.del(key);
+    }
   },
 
   async invalidateCache(tenantId: string, platform: Platform, platformUserId: string): Promise<void> {
