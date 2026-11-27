@@ -60,6 +60,22 @@ export function chatwootWebhookAuth(req: Request, res: Response, next: NextFunct
     return;
   }
 
-  logger.warn('No Chatwoot webhook authentication header present');
+  // Method 3: Query parameter secret (Chatwoot Community webhook URL with ?secret=...)
+  const querySecret = req.query.secret as string | undefined;
+  if (querySecret) {
+    const queryBuf = Buffer.from(querySecret, 'utf8');
+    const secretBuf = Buffer.from(secret, 'utf8');
+
+    if (queryBuf.length !== secretBuf.length || !crypto.timingSafeEqual(queryBuf, secretBuf)) {
+      logger.warn('Invalid Chatwoot webhook query secret');
+      res.status(401).json({ error: 'Invalid webhook secret' });
+      return;
+    }
+
+    next();
+    return;
+  }
+
+  logger.warn('No Chatwoot webhook authentication present');
   res.status(401).json({ error: 'Missing webhook authentication' });
 }

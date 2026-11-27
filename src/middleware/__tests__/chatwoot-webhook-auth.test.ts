@@ -10,6 +10,7 @@ describe('chatwootWebhookAuth middleware', () => {
   beforeEach(() => {
     req = {
       headers: {},
+      query: {},
       body: { event: 'message_created', data: { content: 'hello' } },
     };
     res = {
@@ -119,6 +120,33 @@ describe('chatwootWebhookAuth middleware', () => {
 
       it('rejects request when token length differs', () => {
         req.headers['x-chatwoot-webhook-token'] = 'x';
+
+        chatwootWebhookAuth(req, res, next);
+        expect(res.status).toHaveBeenCalledWith(401);
+        expect(next).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('query parameter secret method (?secret=...)', () => {
+      it('allows request with valid query secret', () => {
+        req.query = { secret: SECRET };
+
+        chatwootWebhookAuth(req, res, next);
+        expect(next).toHaveBeenCalled();
+        expect(res.status).not.toHaveBeenCalled();
+      });
+
+      it('rejects request with invalid query secret', () => {
+        req.query = { secret: 'wrong-secret-value' };
+
+        chatwootWebhookAuth(req, res, next);
+        expect(res.status).toHaveBeenCalledWith(401);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Invalid webhook secret' });
+        expect(next).not.toHaveBeenCalled();
+      });
+
+      it('rejects request when query secret length differs', () => {
+        req.query = { secret: 'x' };
 
         chatwootWebhookAuth(req, res, next);
         expect(res.status).toHaveBeenCalledWith(401);
