@@ -15,6 +15,8 @@ import { checkRedisConnection } from './config/redis';
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 app.use(helmet());
 
 // CORS — read allowed origins from env variable
