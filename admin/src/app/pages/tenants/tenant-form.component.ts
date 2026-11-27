@@ -94,12 +94,12 @@ const DAYS: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday
             <mat-card-content>
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>Viber Auth Token</mat-label>
-                <input matInput formControlName="viber_auth_token" type="password">
+                <input matInput formControlName="viber_auth_token" type="password" autocomplete="new-password">
               </mat-form-field>
 
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>Telegram Bot Token</mat-label>
-                <input matInput formControlName="telegram_bot_token" type="password">
+                <input matInput formControlName="telegram_bot_token" type="password" autocomplete="new-password">
               </mat-form-field>
             </mat-card-content>
           </mat-card>
@@ -116,7 +116,7 @@ const DAYS: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday
 
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>OpenAI API Key</mat-label>
-                <input matInput formControlName="openai_api_key" type="password"
+                <input matInput formControlName="openai_api_key" type="password" autocomplete="new-password"
                        [placeholder]="hasExistingApiKey() ? 'API key is configured (leave empty to keep)' : 'sk-...'">
                 @if (hasExistingApiKey() && !form.get('openai_api_key')?.value) {
                   <mat-hint>A key is already configured. Enter a new value to replace it.</mat-hint>
@@ -172,7 +172,7 @@ const DAYS: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday
                 </div>
                 <mat-form-field appearance="outline" class="full-width">
                   <mat-label>API Token</mat-label>
-                  <input matInput formControlName="chatwoot_api_token" type="password">
+                  <input matInput formControlName="chatwoot_api_token" type="password" autocomplete="new-password">
                 </mat-form-field>
               }
             </mat-card-content>
